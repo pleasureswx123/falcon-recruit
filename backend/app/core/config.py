@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None)
     llm_model: str = Field(default="gpt-4o")
 
+    # 安全：API Key（留空则不启用鉴权，便于本地 smoke；生产必须设置）
+    falcon_api_key: str | None = Field(default=None)
+    # 限流（per-IP，单位/分钟）
+    rate_limit_upload: str = Field(default="10/minute")
+    rate_limit_export: str = Field(default="30/minute")
+    # ZIP 炸弹防御：解压后总大小上限倍数（相对于 max_upload_mb）与文件数上限
+    zip_expand_ratio_max: int = Field(default=10)
+    zip_max_files: int = Field(default=5000)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, v):

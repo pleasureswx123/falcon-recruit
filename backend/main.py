@@ -3,6 +3,7 @@
 启动命令（开发环境）:
     uvicorn main:app --reload --host 127.0.0.1 --port 8000
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,18 +12,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.database import dispose_db, init_db
+from app.core.exceptions import register_exception_handlers
+from app.core.logging import configure_logging
+from app.core.rate_limit import attach_rate_limiter
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动：初始化数据库（自动建表，开发期便利）
-    await init_db()
+    settings = get_settings()
+    # 生产环境不自动 create_all，应通过 alembic upgrade head 管理 schema
+    if settings.debug or settings.database_url.startswith("sqlite"):
+        await init_db()
+    else:
+        logger.info("skip create_all in production - use alembic instead")
+    # 打印鉴权模式，便于运维确认
+    if not settings.falcon_api_key:
+        logger.warning(
+            "FALCON_API_KEY not set: API is running in OPEN mode (dev/smoke only)"
+        )
     yield
-    # 关闭：释放连接池
     await dispose_db()
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     settings = get_settings()
 
     app = FastAPI(
@@ -39,7 +54,11 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
     )
+
+    register_exception_handlers(app)
+    attach_rate_limiter(app)
 
     app.include_router(api_router)
 

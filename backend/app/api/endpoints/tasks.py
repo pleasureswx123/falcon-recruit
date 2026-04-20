@@ -8,15 +8,18 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
+import zipfile
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, SessionDep
+from app.core.rate_limit import limiter
 from app.models.candidate import Candidate
 from app.models.file import FileType, ParseStatus, ResumeFile
 from app.models.job import Job
@@ -54,13 +57,39 @@ async def _execute_pipeline(task_id: str, zip_bytes: bytes) -> None:
             await session.commit()
 
 
+def _validate_zip_bytes(data: bytes, *, max_upload_mb: int, ratio_max: int, max_files: int) -> None:
+    """ZIP 炸弹防御：大小 / 文件数 / 解压后总体积三重校验。"""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            infos = zf.infolist()
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="不是合法的 ZIP 文件")
+    if len(infos) > max_files:
+        raise HTTPException(
+            status_code=413,
+            detail=f"ZIP 内文件数量 {len(infos)} 超过上限 {max_files}",
+        )
+    total_uncompressed = sum(i.file_size for i in infos)
+    allowed = max_upload_mb * 1024 * 1024 * ratio_max
+    if total_uncompressed > allowed:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"ZIP 解压后总大小 {total_uncompressed / 1024 / 1024:.1f} MB "
+                f"超过上限 {max_upload_mb * ratio_max} MB（疑似 zip bomb）"
+            ),
+        )
+
+
 @router.post(
     "/upload",
     response_model=TaskRead,
     status_code=status.HTTP_202_ACCEPTED,
     summary="上传 ZIP 启动分拣任务",
 )
+@limiter.limit(lambda: get_settings().rate_limit_upload)
 async def upload_zip(
+    request: Request,
     session: SessionDep,
     job_id: str = Form(..., description="目标职位 ID"),
     file: UploadFile = File(..., description="简历 ZIP 压缩包"),
@@ -86,6 +115,14 @@ async def upload_zip(
     name_lower = (file.filename or "").lower()
     if not name_lower.endswith(".zip"):
         raise HTTPException(status_code=400, detail="仅支持 .zip 格式")
+
+    # 3.5 ZIP 炸弹防御：提前拒绝畸形压缩包
+    _validate_zip_bytes(
+        data,
+        max_upload_mb=settings.max_upload_mb,
+        ratio_max=settings.zip_expand_ratio_max,
+        max_files=settings.zip_max_files,
+    )
 
     # 4. 创建任务记录
     task = SortingTask(

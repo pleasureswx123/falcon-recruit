@@ -58,8 +58,13 @@ async def main() -> None:
         except Exception as exc:  # noqa: BLE001
             print(f"  ZIP 失败: {exc}")
 
-    print("\n✅ Phase 5 smoke PASS")
+    print("\n[OK] Phase 5 smoke PASS")
 
 
 if __name__ == "__main__":
+    # Windows GBK 控制台兼容：强制 stdout 用 UTF-8，避免 emoji / 中文报错
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except Exception:
+        pass
     asyncio.run(main())

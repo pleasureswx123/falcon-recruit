@@ -5,6 +5,14 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 services:
+  # 生产模式下重新收紧 postgres 的密码：若 .env 未设置 POSTGRES_PASSWORD 则拒绝启动。
+  postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB required}
+      TZ: Asia/Shanghai
+
   backend:
     build:
       context: ./backend
@@ -17,12 +25,15 @@ services:
       DEBUG: "false"
       HOST: 0.0.0.0
       PORT: "8000"
-      # 容器内走 compose 网络别名，而不是 127.0.0.1
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-falcon}:${POSTGRES_PASSWORD:-falcon_dev_pw}@postgres:5432/${POSTGRES_DB:-falcon}
+      # ---- 敏感变量：缺失时直接启动失败（避免弱密码 / 开放鉴权误上线）----
+      FALCON_API_KEY: ${FALCON_API_KEY:?FALCON_API_KEY must be set in .env}
+      # ---- 数据库 & 缓存：容器内走 compose 网络别名 ----
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB required}
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set to frontend origin}
       STORAGE_ROOT: /app/storage
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      # LLM：可选，未配置则自动降级到规则式
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-doubao-1-5-pro-32k-250115}

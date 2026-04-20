@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from app.core.config import get_settings
 from app.core.database import SessionDep
+from app.core.rate_limit import limiter
 from app.services import export_service as es
 from app.services.export_service import ExportFilter
 
@@ -27,7 +29,9 @@ def _attachment_header(name: str) -> str:
 
 
 @router.get("/zip/{job_id}", summary="批量导出重命名附件 ZIP")
+@limiter.limit(lambda: get_settings().rate_limit_export)
 async def export_zip(
+    request: Request,
     job_id: str,
     session: SessionDep,
     verified_only: bool = Query(
@@ -65,7 +69,9 @@ async def export_zip(
 
 
 @router.get("/csv/{job_id}", summary="导出候选人评分 CSV")
+@limiter.limit(lambda: get_settings().rate_limit_export)
 async def export_csv(
+    request: Request,
     job_id: str,
     session: SessionDep,
     verified_only: bool = Query(default=False),

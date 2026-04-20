@@ -20,6 +20,9 @@ asyncpg>=0.30.0,<0.32.0
 # Redis (Phase 3 异步任务状态 / 缓存)
 redis>=5.2.0,<6.0.0
 
+# 限流（生产加固：per-IP 限流 /api/tasks/upload、/api/export/*）
+slowapi>=0.1.9,<0.2.0
+
 # 文件解析 (Phase 3)
 pymupdf>=1.25.0
 python-docx>=1.1.2

@@ -40,7 +40,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /install /usr/local
 COPY . .
 
-RUN mkdir -p /app/storage
+# 创建非特权用户并移交运行时目录
+RUN groupadd -r falcon && useradd -r -g falcon -d /app -s /usr/sbin/nologin falcon \
+    && mkdir -p /app/storage \
+    && chown -R falcon:falcon /app
+
+USER falcon
 
 EXPOSE 8000
 
