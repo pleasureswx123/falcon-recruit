@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual env
+.venv/
+venv/
+ENV/
+
+# 本地开发数据（容器里用 compose 的 postgres）
+falcon.db
+falcon_smoke_sort.db
+*.sqlite
+*.sqlite3
+
+# 运行时产物
+storage/
+storage_smoke/
+*.log
+
+# 环境文件（容器启动时由 compose 注入）
+.env
+.env.*
+!.env.example
+
+# 编辑器 / 版本控制
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 构建产物本身
+Dockerfile
+.dockerignore

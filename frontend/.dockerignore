@@ -1,0 +1,37 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Next.js build output
+.next
+out
+
+# Production
+build
+dist
+
+# 环境文件（容器启动时由 compose 注入）
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# 调试 & 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Git / Editor / OS
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# 构建产物本身
+Dockerfile
+.dockerignore

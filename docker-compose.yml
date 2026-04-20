@@ -1,0 +1,63 @@
+# 猎鹰 Falcon AI · 基础设施 compose（PostgreSQL + Redis）
+# 本地开发 & 服务器生产通用；生产场景再叠加 docker-compose.prod.yml。
+#
+# 本地开发：
+#   docker compose up -d
+#   # 然后在宿主机跑 uvicorn / npm run dev，通过 127.0.0.1 的映射端口访问 DB/Redis
+#
+# 服务器部署：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 变量来源：同目录的 .env（参考 .env.example）。
+
+name: falcon-recruit
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: falcon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-falcon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-falcon_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-falcon}
+      TZ: Asia/Shanghai
+    # 仅绑定宿主机 loopback，避免端口暴露到公网
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-falcon} -d ${POSTGRES_DB:-falcon}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    networks:
+      - falcon-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: falcon-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+    networks:
+      - falcon-net
+
+networks:
+  falcon-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:

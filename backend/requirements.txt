@@ -1,0 +1,36 @@
+# 猎鹰 Falcon AI · 后端依赖
+# Python 3.10+
+
+# Web 框架
+fastapi>=0.115.0,<0.120.0
+uvicorn[standard]>=0.32.0,<0.36.0
+
+# 配置 & 数据校验
+pydantic>=2.8.0,<3.0.0
+pydantic-settings>=2.5.0,<3.0.0
+python-dotenv>=1.0.1,<2.0.0
+
+# ORM & 数据库 (Phase 2)
+sqlmodel>=0.0.22,<0.1.0
+sqlalchemy[asyncio]>=2.0.36,<3.0.0
+aiosqlite>=0.20.0,<0.22.0
+asyncpg>=0.30.0,<0.32.0
+# alembic>=1.14.0        # Phase 2 末尾启用
+
+# Redis (Phase 3 异步任务状态 / 缓存)
+redis>=5.2.0,<6.0.0
+
+# 文件解析 (Phase 3)
+pymupdf>=1.25.0
+python-docx>=1.1.2
+# filetype: 纯 Python 签名嗅探，跨平台零依赖（替代 python-magic 避免 Windows libmagic.dll 麻烦）
+filetype>=1.2.0
+# FastAPI multipart 表单上传（ZIP UploadFile 需要）
+python-multipart>=0.0.20
+
+# LLM (Phase 4 启用)
+# openai>=1.60.0
+
+# 开发工具
+ruff>=0.8.0
+httpx>=0.28.0,<0.30.0   # fastapi TestClient 依赖

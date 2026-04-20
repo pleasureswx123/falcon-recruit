@@ -1,0 +1,48 @@
+# ---- IDE / OS ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ---- Env（严禁入库）----
+.env
+.env.local
+.env.*.local
+*.local
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- 本地数据库 / 日志 / 上传 ----
+*.sqlite3
+*.db
+*.log
+backend/storage/
+backend/storage_smoke/
+backend/uploads/
+
+# ---- Augment 内部文件 ----
+.augment/

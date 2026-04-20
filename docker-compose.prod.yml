@@ -1,0 +1,63 @@
+# 猎鹰 Falcon AI · 生产 override
+# 在基础 compose 之上追加 backend + frontend 容器服务。
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: falcon-backend:latest
+    container_name: falcon-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      HOST: 0.0.0.0
+      PORT: "8000"
+      # 容器内走 compose 网络别名，而不是 127.0.0.1
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-falcon}:${POSTGRES_PASSWORD:-falcon_dev_pw}@postgres:5432/${POSTGRES_DB:-falcon}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      STORAGE_ROOT: /app/storage
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-doubao-1-5-pro-32k-250115}
+      TZ: Asia/Shanghai
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - backend-storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - falcon-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Next.js 会把 NEXT_PUBLIC_* 嵌到构建产物里
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    image: falcon-frontend:latest
+    container_name: falcon-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - falcon-net
+
+volumes:
+  backend-storage:
