@@ -1,7 +1,6 @@
 """数据库连接与会话管理。
 
-使用 SQLModel(基于 SQLAlchemy 2.0) 的异步引擎。
-默认 SQLite + aiosqlite，开发零配置；生产可在 .env 切换为 PostgreSQL+asyncpg。
+使用 SQLModel(基于 SQLAlchemy 2.0) 的异步引擎。开发与生产统一使用 PostgreSQL + asyncpg。
 """
 from __future__ import annotations
 
@@ -16,16 +15,10 @@ from app.core.config import get_settings
 
 _settings = get_settings()
 
-# SQLite 在 async 模式下需要 check_same_thread=False
-_connect_args: dict = {}
-if _settings.database_url.startswith("sqlite"):
-    _connect_args = {"check_same_thread": False}
-
 engine = create_async_engine(
     _settings.database_url,
     echo=_settings.database_echo,
     future=True,
-    connect_args=_connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(

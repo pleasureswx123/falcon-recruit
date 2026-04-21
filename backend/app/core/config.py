@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     )
 
     # 数据库（Phase 2）
-    database_url: str = Field(default="sqlite+aiosqlite:///./falcon.db")
+    database_url: str = Field(
+        default="postgresql+asyncpg://falcon:falcon_dev_pw@127.0.0.1:5432/falcon"
+    )
     database_echo: bool = Field(default=False)
 
     # Redis（Phase 3 启用）

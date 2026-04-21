@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # 必须在 import 前设置，让 Settings 走到"启用鉴权"分支
 os.environ["FALCON_API_KEY"] = "smoke-test-key"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./falcon_smoke_auth.db"
 
 import asyncio  # noqa: E402
 

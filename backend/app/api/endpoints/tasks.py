@@ -4,16 +4,20 @@
 - POST   /api/tasks/upload          上传 ZIP，返回 task_id（异步执行分拣流水线）
 - GET    /api/tasks/{task_id}       获取任务状态与进度
 - GET    /api/tasks                 列表（支持 job_id 过滤）
-"""
-from __future__ import annotations
 
+注意：本文件有意不使用 `from __future__ import annotations`。
+原因：`file: UploadFile = File(...)` 在 pydantic 2.13 与延迟注解组合下会被
+解析为 `TypeAdapter[Annotated[ForwardRef('UploadFile'), File(...)]]`，
+构造阶段抛 `PydanticUserError`，导致 solve_dependencies 阶段崩溃 500
+并绕过全局异常处理器与 CORS 中间件。
+"""
 import asyncio
 import io
 import logging
 import zipfile
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
@@ -90,6 +94,7 @@ def _validate_zip_bytes(data: bytes, *, max_upload_mb: int, ratio_max: int, max_
 @limiter.limit(lambda: get_settings().rate_limit_upload)
 async def upload_zip(
     request: Request,
+    response: Response,
     session: SessionDep,
     job_id: str = Form(..., description="目标职位 ID"),
     file: UploadFile = File(..., description="简历 ZIP 压缩包"),

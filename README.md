@@ -71,6 +71,8 @@ uvicorn main:app --reload --port 8000
 cd frontend
 npm install
 npm run dev                # http://localhost:3000
+
+Remove-Item -Recurse -Force .next
 ```
 
 ### 模式 B · 全栈容器化（服务器部署 / 演示）

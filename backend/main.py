@@ -19,14 +19,54 @@ from app.core.rate_limit import attach_rate_limiter
 logger = logging.getLogger(__name__)
 
 
+async def _reconcile_stale_tasks() -> None:
+    """重启兜底：把所有卡在非终态的任务标记为 failed，避免"僵尸任务"。
+
+    `asyncio.create_task()` 启动的后台协程在进程重启时会被直接杀死，
+    但 DB 中的 status 不会被回写，前端会看到任务永远停留在 linking/parsing。
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update as sqa_update
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.task import SortingTask, TaskStatus
+
+    non_terminal = [
+        TaskStatus.PENDING,
+        TaskStatus.EXTRACTING,
+        TaskStatus.PARSING,
+        TaskStatus.LINKING,
+    ]
+    async with AsyncSessionLocal() as session:
+        now = datetime.now(timezone.utc)
+        stmt = (
+            sqa_update(SortingTask)
+            .where(SortingTask.status.in_(non_terminal))
+            .values(
+                status=TaskStatus.FAILED,
+                error_message="服务重启导致任务中断",
+                stage_message="已中断",
+                finished_at=now,
+                updated_at=now,
+            )
+        )
+        result = await session.execute(stmt)
+        await session.commit()
+        if result.rowcount:
+            logger.warning("reconciled %d stale tasks as failed", result.rowcount)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     # 生产环境不自动 create_all，应通过 alembic upgrade head 管理 schema
-    if settings.debug or settings.database_url.startswith("sqlite"):
+    if settings.debug:
         await init_db()
     else:
         logger.info("skip create_all in production - use alembic instead")
+    # 清理因上次进程崩溃/重启遗留的僵尸任务
+    await _reconcile_stale_tasks()
     # 打印鉴权模式，便于运维确认
     if not settings.falcon_api_key:
         logger.warning(

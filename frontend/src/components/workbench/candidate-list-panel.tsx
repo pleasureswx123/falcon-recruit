@@ -84,7 +84,7 @@ export function CandidateListPanel({ jobId, selectedId, onSelect }: Props) {
                       className="absolute inset-0"
                       aria-label={`选择候选人 ${c.name ?? ""}`}
                     />
-                    <div className="relative flex items-center justify-between gap-2">
+                    <div className="pointer-events-none relative flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-medium">
                         {c.name ?? "（未识别姓名）"}
                       </span>
@@ -100,7 +100,7 @@ export function CandidateListPanel({ jobId, selectedId, onSelect }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="relative flex items-center justify-between gap-2">
+                    <div className="pointer-events-none relative flex items-center justify-between gap-2">
                       <div className="flex flex-1 flex-wrap gap-x-3 text-[11px] text-muted-foreground">
                         {c.phone && <span>📱 {c.phone}</span>}
                         {c.email && (
@@ -110,7 +110,7 @@ export function CandidateListPanel({ jobId, selectedId, onSelect }: Props) {
                       <Link
                         href={`/candidates/${c.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative z-10 opacity-0 transition group-hover:opacity-100"
+                        className="pointer-events-auto relative z-10 opacity-0 transition group-hover:opacity-100"
                         aria-label="查看评分详情"
                         title="查看评分详情"
                       >

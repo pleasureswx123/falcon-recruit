@@ -6,15 +6,11 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
 # 将 backend 根目录纳入 sys.path，便于直接作为脚本执行
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-# 使用独立 SQLite 临时库，避免污染开发数据
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./falcon_smoke.db"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -85,10 +81,6 @@ def main() -> int:
         assert r.status_code == 404, r.text
         print("[delete] OK")
 
-    # 清理临时库
-    db = Path(__file__).resolve().parent.parent / "falcon_smoke.db"
-    if db.exists():
-        db.unlink()
     print("\nALL PASS ✓")
     return 0
 

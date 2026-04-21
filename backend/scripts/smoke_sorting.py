@@ -20,13 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./falcon_smoke_sort.db")
 os.environ.setdefault("STORAGE_ROOT", "./storage_smoke")
-
-# 清掉上一次的数据
-smoke_db = ROOT / "falcon_smoke_sort.db"
-if smoke_db.exists():
-    smoke_db.unlink()
 
 
 def build_pdf(text: str) -> bytes:

@@ -252,15 +252,29 @@ async def run_pipeline(
     )
 
     # ---- 阶段 3.5：AI 画像评分（Phase 4） ----
+    candidate_ids = [c["candidate_id"] for c in diagnostics["candidates"]]
+    total_cand = len(candidate_ids)
     await _update_task(
         session, task,
-        stage_message="生成 AI 画像评分", progress=88,
+        stage_message=f"生成 AI 画像评分 0/{total_cand}", progress=88,
     )
     try:
-        from app.services.profile_pipeline import compute_reports_bulk
+        from app.services.profile_pipeline import compute_report
 
-        candidate_ids = [c["candidate_id"] for c in diagnostics["candidates"]]
-        await compute_reports_bulk(session, candidate_ids)
+        for i, cid in enumerate(candidate_ids, start=1):
+            cand = await session.get(Candidate, cid)
+            if cand is None:
+                continue
+            try:
+                await compute_report(session, cand)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("compute_report failed for %s: %s", cid, exc)
+            pct = 88 + int(11 * i / max(total_cand, 1))
+            await _update_task(
+                session, task,
+                stage_message=f"生成 AI 画像评分 {i}/{total_cand}",
+                progress=pct,
+            )
     except Exception as exc:  # noqa: BLE001
         logger.exception("scoring pipeline failed: %s", exc)
 
