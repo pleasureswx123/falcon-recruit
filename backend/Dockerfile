@@ -10,6 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /build
 
+# 配置 pip 国内镜像源
+COPY pip.conf /root/.pip/pip.conf
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
@@ -30,6 +33,9 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000
 
 WORKDIR /app
+
+# 配置 pip 国内镜像源（供运行时可能的 pip 安装使用）
+COPY pip.conf /root/.pip/pip.conf
 
 # 仅保留运行期所需 lib（pymupdf 不需要额外系统依赖；libpq 用于 asyncpg 运行期）
 RUN apt-get update && apt-get install -y --no-install-recommends \
