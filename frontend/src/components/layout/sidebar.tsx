@@ -28,7 +28,7 @@ export function Sidebar() {
       </ScrollArea>
       <Separator />
       <div className="px-4 py-3 text-[11px] text-muted-foreground">
-        v0.1.0 · © 2026 Falcon AI
+        v0.1.0 · © 2026 北京莱博塔科技有限公司
       </div>
     </aside>
   )
