@@ -22,17 +22,17 @@ const sections: NavSection[] = [
       { title: "候选人", href: "/candidates", icon: Users },
     ],
   },
-  {
-    title: "系统",
-    items: [
-      {
-        title: "系统设置",
-        href: "/settings",
-        icon: Settings,
-        disabled: true,
-      },
-    ],
-  },
+  // {
+  //   title: "系统",
+  //   items: [
+  //     {
+  //       title: "系统设置",
+  //       href: "/settings",
+  //       icon: Settings,
+  //       disabled: true,
+  //     },
+  //   ],
+  // },
 ]
 
 export function SidebarNav() {
