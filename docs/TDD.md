@@ -167,9 +167,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 | `redis-data`    | Redis AOF 持久化文件 |
 | `backend-storage` | 生产模式下 backend 容器内 `/app/storage`（ZIP 解压物 / 导出文件） |
 
-### 7.4 数据库迁移（SQLite → PostgreSQL）
-开发期默认可继续用 SQLite（修改 backend `.env` 注释切换）；切到 PostgreSQL 后：
-1. `docker compose up -d postgres` 起库；
+### 7.4 数据库初始化与迁移
+项目统一使用 PostgreSQL 16，本地开发与生产环境完全一致：
+1. `docker compose up -d postgres` 启动 PostgreSQL 容器；
 2. 后端启动时 `init_db()` 通过 SQLModel 元数据自动建表（POC 阶段不接入 Alembic）；
 3. 生产正式上线前再引入 `alembic` 做增量迁移；目前 requirements 里已预留条目。
 

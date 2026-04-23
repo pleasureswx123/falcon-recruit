@@ -26,6 +26,7 @@ htmlcov/
 .vscode/
 
 *.log
+# 注意：项目统一使用 PostgreSQL，以下规则仅用于忽略临时测试文件
 *.sqlite3
 *.db
 

@@ -37,6 +37,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # ---- 本地数据库 / 日志 / 上传 ----
+# 注意：项目统一使用 PostgreSQL，以下规则仅用于忽略临时测试文件
 *.sqlite3
 *.db
 *.log
