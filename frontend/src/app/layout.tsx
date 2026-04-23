@@ -19,6 +19,9 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "猎鹰 Falcon AI · 智能招聘管理系统",
   description: "AI 驱动的简历智能分拣与人岗匹配平台",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
