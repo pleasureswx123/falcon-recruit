@@ -1,7 +1,11 @@
 import axios, { type AxiosError, type AxiosInstance } from "axios"
 
+// 开发环境使用相对路径（通过 Next.js rewrites 代理到后端）
+// 生产环境使用环境变量配置的完整 URL
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+  process.env.NODE_ENV === "development"
+    ? ""
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000")
 
 const API_KEY_STORAGE = "falcon_api_key"
 
