@@ -23,8 +23,6 @@ services:
     environment:
       APP_ENV: production
       DEBUG: "false"
-      HOST: 0.0.0.0
-      PORT: "8000"
       # ---- 敏感变量：缺失时直接启动失败（避免弱密码 / 开放鉴权误上线）----
       FALCON_API_KEY: ${FALCON_API_KEY:?FALCON_API_KEY must be set in .env}
       # ---- 数据库 & 缓存：容器内走 compose 网络别名 ----
@@ -32,7 +30,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       STORAGE_ROOT: /app/storage
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
-      # LLM：可选，未配置则自动降级到规则式
+      # LLM：可选，未配置则自动降级到规则式（生产默认使用火山方舟 doubao 模型）
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-doubao-1-5-pro-32k-250115}

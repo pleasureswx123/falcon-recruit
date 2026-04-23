@@ -27,10 +27,7 @@ RUN pip install --upgrade pip \
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    APP_ENV=production \
-    HOST=0.0.0.0 \
-    PORT=8000
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
