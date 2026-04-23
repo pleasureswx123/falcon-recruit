@@ -77,7 +77,6 @@ http://localhost:80 (Nginx)
 ```env
 NGINX_PORT=80
 NEXT_PUBLIC_API_BASE_URL=/api
-CORS_ORIGINS=*
 ```
 
 ### Nginx 路由规则

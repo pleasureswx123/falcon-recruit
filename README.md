@@ -119,7 +119,6 @@ bash scripts/verify_nginx.sh
 | `LLM_MODEL` | 模型名 | `doubao-1-5-pro-32k-250115` |
 | `NEXT_PUBLIC_API_BASE_URL` | 前端指向的后端 | `/api` (生产环境) |
 | `NGINX_PORT` | Nginx 对外端口 | 80 |
-| `CORS_ORIGINS` | CORS 允许来源 | `*` (生产环境通过 Nginx 统一入口)
 | `MAX_UPLOAD_MB` | ZIP 上传上限 | 200 |
 
 ---

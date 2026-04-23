@@ -30,8 +30,6 @@ services:
       # ---- 数据库 & 缓存：容器内走 compose 网络别名 ----
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB required}
       REDIS_URL: redis://redis:6379/0
-      # 生产环境通过 Nginx 统一入口，CORS 可以设置为 Nginx 的域名
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
       STORAGE_ROOT: /app/storage
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
       # LLM：可选，未配置则自动降级到规则式

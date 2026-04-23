@@ -29,14 +29,6 @@ class Settings(BaseSettings):
     host: str = Field(default="127.0.0.1")
     port: int = Field(default=8000)
 
-    # CORS（禁用 JSON 解析，由下方 validator 自行按逗号切分）
-    cors_origins: Annotated[List[str], NoDecode] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ]
-    )
-
     # 数据库（Phase 2）
     database_url: str = Field(
         default="postgresql+asyncpg://falcon:falcon_dev_pw@127.0.0.1:5432/falcon"
@@ -63,13 +55,6 @@ class Settings(BaseSettings):
     # ZIP 炸弹防御：解压后总大小上限倍数（相对于 max_upload_mb）与文件数上限
     zip_expand_ratio_max: int = Field(default=10)
     zip_max_files: int = Field(default=5000)
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _split_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [item.strip() for item in v.split(",") if item.strip()]
-        return v
 
 
 @lru_cache(maxsize=1)

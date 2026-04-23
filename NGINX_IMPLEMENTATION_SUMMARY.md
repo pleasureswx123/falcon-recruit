@@ -32,7 +32,6 @@
   - 前端不再直接暴露端口，通过 Nginx 代理
   - 后端不再直接暴露端口，通过 Nginx 代理
   - 前端 `NEXT_PUBLIC_API_BASE_URL` 改为 `/api`（相对路径）
-  - 后端 `CORS_ORIGINS` 可设置为 `*`（因为通过 Nginx 统一入口）
 
 ### 3. 环境变量配置
 
@@ -42,7 +41,6 @@
   ```env
   NGINX_PORT=80
   NEXT_PUBLIC_API_BASE_URL=/api
-  CORS_ORIGINS=*
   ```
 
 ### 4. 部署脚本

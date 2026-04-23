@@ -41,9 +41,6 @@ NGINX_PORT=80
 # 前端构建时使用相对路径
 NEXT_PUBLIC_API_BASE_URL=/api
 
-# CORS 配置（通过 Nginx 统一入口后可设为 *）
-CORS_ORIGINS=*
-
 # 数据库密码（生产环境必须修改为强密码）
 POSTGRES_PASSWORD=your_strong_password_here
 
