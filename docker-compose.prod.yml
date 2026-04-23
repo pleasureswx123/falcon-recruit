@@ -69,10 +69,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        # Next.js 会把 NEXT_PUBLIC_* 嵌到构建产物里
-        # 生产环境通过 Nginx 代理，使用相对路径
-        NEXT_PUBLIC_API_BASE_URL: /api
     image: falcon-frontend:latest
     container_name: falcon-frontend
     restart: unless-stopped

@@ -117,7 +117,6 @@ bash scripts/verify_nginx.sh
 | `OPENAI_API_KEY` | LLM Key（留空即降级） | — |
 | `OPENAI_BASE_URL` | LLM endpoint | 火山方舟 `/api/v3` |
 | `LLM_MODEL` | 模型名 | `doubao-1-5-pro-32k-250115` |
-| `NEXT_PUBLIC_API_BASE_URL` | 前端 API 地址 | `/api` (生产环境，开发环境不使用) |
 | `NGINX_PORT` | Nginx 对外端口 | 80 |
 | `MAX_UPLOAD_MB` | ZIP 上传上限 | 200 |
 

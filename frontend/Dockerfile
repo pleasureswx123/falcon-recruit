@@ -15,9 +15,6 @@ RUN npm ci --no-audit --no-fund
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# 构建期注入前端公共环境变量（Next.js 会把它嵌入到产物中）
-ARG NEXT_PUBLIC_API_BASE_URL
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
