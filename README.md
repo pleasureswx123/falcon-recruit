@@ -83,7 +83,25 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 # 查看服务状态
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-# 前端: http://<host>:3000   后端: http://<host>:8000/docs
+# 访问地址: http://<host>:80  (通过 Nginx 统一入口)
+# 前端页面: http://<host>/
+# 后端 API: http://<host>/api/
+# API 文档: http://<host>/api/docs
+```
+
+**架构说明：**
+- **Nginx** 作为反向代理，统一处理所有请求
+- `/` → 前端 Next.js 应用
+- `/api/` → 后端 FastAPI 服务
+- 彻底解决跨域问题，前后端在同一域名下
+
+**验证部署：**
+```bash
+# Linux/macOS
+bash scripts/verify_nginx.sh
+
+# Windows PowerShell
+.\scripts\verify_nginx.ps1
 ```
 
 ---
@@ -99,7 +117,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 | `OPENAI_API_KEY` | LLM Key（留空即降级） | — |
 | `OPENAI_BASE_URL` | LLM endpoint | 火山方舟 `/api/v3` |
 | `LLM_MODEL` | 模型名 | `doubao-1-5-pro-32k-250115` |
-| `NEXT_PUBLIC_API_BASE_URL` | 前端指向的后端 | `http://localhost:8000` |
+| `NEXT_PUBLIC_API_BASE_URL` | 前端指向的后端 | `/api` (生产环境) |
+| `NGINX_PORT` | Nginx 对外端口 | 80 |
+| `CORS_ORIGINS` | CORS 允许来源 | `*` (生产环境通过 Nginx 统一入口)
 | `MAX_UPLOAD_MB` | ZIP 上传上限 | 200 |
 
 ---
