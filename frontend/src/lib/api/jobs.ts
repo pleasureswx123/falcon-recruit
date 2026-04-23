@@ -72,19 +72,19 @@ export type JobUpdatePayload = Partial<
 export async function listJobs(
   params: JobListQuery = {}
 ): Promise<JobListResponse> {
-  const { data } = await apiClient.get<JobListResponse>("/api/jobs", {
+  const { data } = await apiClient.get<JobListResponse>("/jobs", {
     params,
   })
   return data
 }
 
 export async function getJob(id: string): Promise<Job> {
-  const { data } = await apiClient.get<Job>(`/api/jobs/${id}`)
+  const { data } = await apiClient.get<Job>(`/jobs/${id}`)
   return data
 }
 
 export async function createJob(payload: JobCreatePayload): Promise<Job> {
-  const { data } = await apiClient.post<Job>("/api/jobs", payload)
+  const { data } = await apiClient.post<Job>("/jobs", payload)
   return data
 }
 
@@ -92,17 +92,17 @@ export async function updateJob(
   id: string,
   payload: JobUpdatePayload
 ): Promise<Job> {
-  const { data } = await apiClient.patch<Job>(`/api/jobs/${id}`, payload)
+  const { data } = await apiClient.patch<Job>(`/jobs/${id}`, payload)
   return data
 }
 
 export async function deleteJob(id: string): Promise<void> {
-  await apiClient.delete(`/api/jobs/${id}`)
+  await apiClient.delete(`/jobs/${id}`)
 }
 
 export async function parseJd(raw_jd: string): Promise<JobCriteria> {
   const { data } = await apiClient.post<{ criteria: JobCriteria }>(
-    "/api/jobs/parse-jd",
+    "/jobs/parse-jd",
     { raw_jd }
   )
   return data.criteria
@@ -115,7 +115,7 @@ export interface GenerateJdPayload {
 
 export async function generateJd(payload: GenerateJdPayload): Promise<string> {
   const { data } = await apiClient.post<{ jd_text: string }>(
-    "/api/jobs/generate-jd",
+    "/jobs/generate-jd",
     payload
   )
   return data.jd_text

@@ -20,7 +20,7 @@ export function buildExportUrl(
   }
   const qs = params.toString()
   const suffix = qs ? `?${qs}` : ""
-  return `${API_BASE_URL}/api/export/${format}/${jobId}${suffix}`
+  return `${API_BASE_URL}/export/${format}/${jobId}${suffix}`
 }
 
 /** 从 Content-Disposition 中提取 RFC 5987 的 filename*=UTF-8''xxx 部分。 */
@@ -45,7 +45,7 @@ export async function downloadExport(
   filter: ExportFilter = {},
   fallbackName?: string
 ): Promise<{ filename: string; size: number }> {
-  const path = `/api/export/${format}/${jobId}`
+  const path = `/export/${format}/${jobId}`
   const params: Record<string, string> = {}
   if (filter.verifiedOnly) params.verified_only = "true"
   if (filter.minScore != null && filter.minScore > 0) {

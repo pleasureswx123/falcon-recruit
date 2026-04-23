@@ -49,7 +49,7 @@ export async function getDashboardOverview(params: {
   recent_limit?: number
 } = {}): Promise<DashboardOverview> {
   const { data } = await apiClient.get<DashboardOverview>(
-    "/api/dashboard/overview",
+    "/dashboard/overview",
     { params }
   )
   return data

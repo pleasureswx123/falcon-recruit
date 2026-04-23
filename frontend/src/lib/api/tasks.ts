@@ -70,7 +70,7 @@ export async function uploadZip(params: {
   form.append("job_id", params.job_id)
   form.append("file", params.file)
   const { data } = await apiClient.post<SortingTask>(
-    "/api/tasks/upload",
+    "/tasks/upload",
     form,
     {
       headers: { "Content-Type": "multipart/form-data" },
@@ -86,14 +86,14 @@ export async function uploadZip(params: {
 }
 
 export async function getTask(id: string): Promise<SortingTask> {
-  const { data } = await apiClient.get<SortingTask>(`/api/tasks/${id}`)
+  const { data } = await apiClient.get<SortingTask>(`/tasks/${id}`)
   return data
 }
 
 export async function listTasks(
   params: TaskListQuery = {}
 ): Promise<TaskListResponse> {
-  const { data } = await apiClient.get<TaskListResponse>("/api/tasks", {
+  const { data } = await apiClient.get<TaskListResponse>("/tasks", {
     params,
   })
   return data
@@ -129,7 +129,7 @@ export async function getUnmatchedFiles(
   taskId: string
 ): Promise<UnmatchedFilesResponse> {
   const { data } = await apiClient.get<UnmatchedFilesResponse>(
-    `/api/tasks/${taskId}/unmatched-files`
+    `/tasks/${taskId}/unmatched-files`
   )
   return data
 }

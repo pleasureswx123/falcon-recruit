@@ -63,7 +63,7 @@ export async function listCandidates(
   params: CandidateListQuery = {}
 ): Promise<CandidateListResponse> {
   const { data } = await apiClient.get<CandidateListResponse>(
-    "/api/candidates",
+    "/candidates",
     { params }
   )
   return data
@@ -71,7 +71,7 @@ export async function listCandidates(
 
 export async function getCandidate(id: string): Promise<CandidateDetail> {
   const { data } = await apiClient.get<CandidateDetail>(
-    `/api/candidates/${id}`
+    `/candidates/${id}`
   )
   return data
 }
@@ -81,7 +81,7 @@ export async function updateCandidate(
   payload: CandidateUpdatePayload
 ): Promise<Candidate> {
   const { data } = await apiClient.patch<Candidate>(
-    `/api/candidates/${id}`,
+    `/candidates/${id}`,
     payload
   )
   return data
@@ -92,7 +92,7 @@ export async function reassignFile(params: {
   file_id: string
 }): Promise<CandidateFile> {
   const { data } = await apiClient.post<CandidateFile>(
-    `/api/candidates/${params.candidate_id}/files/${params.file_id}`
+    `/candidates/${params.candidate_id}/files/${params.file_id}`
   )
   return data
 }
@@ -101,11 +101,11 @@ export async function reassignFile(params: {
 
 export function fileDownloadUrl(fileId: string, rename = true): string {
   const q = rename ? "" : "?rename=false"
-  return `${API_BASE_URL}/api/files/${fileId}/download${q}`
+  return `${API_BASE_URL}/files/${fileId}/download${q}`
 }
 
 export function filePreviewUrl(fileId: string): string {
-  return `${API_BASE_URL}/api/files/${fileId}/preview`
+  return `${API_BASE_URL}/files/${fileId}/preview`
 }
 
 // ===== 显示工具 =====

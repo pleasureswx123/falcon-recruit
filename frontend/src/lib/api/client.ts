@@ -3,13 +3,9 @@ import axios, { type AxiosError, type AxiosInstance } from "axios"
 /**
  * API 基础 URL 配置
  * 
- * 开发环境：使用空字符串，通过 next.config.mjs 的 rewrites 代理到后端
- * 生产环境：使用 NEXT_PUBLIC_API_BASE_URL（通常为 /api，通过 Nginx 代理）
+ * 统一使用 /api 前缀，通过代理层转发到后端
  */
-export const API_BASE_URL =
-  process.env.NODE_ENV === "development"
-    ? "" // 开发环境通过 Next.js rewrites 代理
-    : (process.env.NEXT_PUBLIC_API_BASE_URL || "/api")
+export const API_BASE_URL = "/api"
 
 const API_KEY_STORAGE = "falcon_api_key"
 

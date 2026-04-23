@@ -9,6 +9,6 @@ export interface HealthResponse {
 }
 
 export async function getHealth(): Promise<HealthResponse> {
-  const { data } = await apiClient.get<HealthResponse>("/api/health")
+  const { data } = await apiClient.get<HealthResponse>("/health")
   return data
 }

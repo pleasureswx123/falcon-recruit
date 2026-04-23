@@ -99,7 +99,7 @@ export async function getCandidateReport(
   refresh = false
 ): Promise<CandidateReport> {
   const { data } = await apiClient.get<CandidateReport>(
-    `/api/candidates/${candidateId}/report`,
+    `/candidates/${candidateId}/report`,
     { params: refresh ? { refresh: true } : {} }
   )
   return data
