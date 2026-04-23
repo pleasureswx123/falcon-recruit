@@ -31,7 +31,8 @@
   - 添加 `nginx` 服务
   - 前端不再直接暴露端口，通过 Nginx 代理
   - 后端不再直接暴露端口，通过 Nginx 代理
-  - 前端 `NEXT_PUBLIC_API_BASE_URL` 改为 `/api`（相对路径）
+  - 前端 `NEXT_PUBLIC_API_BASE_URL` 改为 `/api`（相对路径，仅生产环境使用）
+  - 开发环境不使用此变量，前端通过 next.config.mjs 的 rewrites 代理
 
 ### 3. 环境变量配置
 
@@ -40,6 +41,7 @@
 - **新增配置**:
   ```env
   NGINX_PORT=80
+  # 前端 API 地址（仅生产环境使用）
   NEXT_PUBLIC_API_BASE_URL=/api
   ```
 
@@ -219,7 +221,7 @@ location /api/ {
 2. **跨域问题仍然存在**
    - 确认前端已重新构建
    - 清除浏览器缓存
-   - 检查 `NEXT_PUBLIC_API_BASE_URL=/api`
+   - 检查 `NEXT_PUBLIC_API_BASE_URL=/api` 已正确设置（仅生产环境）
 
 3. **上传文件失败**
    - 检查 Nginx 的 `client_max_body_size`

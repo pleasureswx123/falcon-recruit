@@ -156,7 +156,8 @@ npm run dev
 
 ```bash
 cp .env.example .env
-# 编辑 .env：修改 POSTGRES_PASSWORD、OPENAI_API_KEY、NEXT_PUBLIC_API_BASE_URL 等
+# 编辑 .env：修改 POSTGRES_PASSWORD、OPENAI_API_KEY 等
+# 注意：NEXT_PUBLIC_API_BASE_URL 仅生产环境使用，开发环境通过 next.config.mjs rewrites 代理
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 

@@ -76,6 +76,7 @@ http://localhost:80 (Nginx)
 ### 环境变量 (.env)
 ```env
 NGINX_PORT=80
+# 前端 API 地址（仅生产环境使用，开发环境通过 next.config.mjs rewrites 代理）
 NEXT_PUBLIC_API_BASE_URL=/api
 ```
 

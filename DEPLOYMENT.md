@@ -38,7 +38,8 @@ cp .env.example .env
 # Nginx 对外端口（默认 80）
 NGINX_PORT=80
 
-# 前端构建时使用相对路径
+# 前端构建时使用相对路径（通过 Nginx 代理到后端）
+# 开发环境不使用此变量，前端通过 next.config.mjs 的 rewrites 代理
 NEXT_PUBLIC_API_BASE_URL=/api
 
 # 数据库密码（生产环境必须修改为强密码）
@@ -229,7 +230,7 @@ docker network inspect falcon-recruit_falcon-net
 ### 3. 跨域问题仍然存在
 
 检查点：
-1. 确认 `NEXT_PUBLIC_API_BASE_URL=/api` 已正确设置
+1. 确认 `NEXT_PUBLIC_API_BASE_URL=/api` 已正确设置（仅生产环境，开发环境不使用）
 2. 确认前端重新构建（清除缓存）
 3. 检查浏览器控制台的网络请求地址
 
