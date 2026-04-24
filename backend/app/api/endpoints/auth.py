@@ -103,6 +103,7 @@ async def login(
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     response: Response,
     current_user: User = Depends(get_current_user),
 ):
@@ -112,7 +113,7 @@ async def logout(
     - 清除客户端 Cookie
     """
     # 从请求中获取 Session ID 并删除
-    session_id = response.cookies.get("session_id")
+    session_id = request.cookies.get("session_id")
     if session_id:
         await delete_session(session_id)
     
