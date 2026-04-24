@@ -10,7 +10,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.database import SessionDep
@@ -24,6 +24,8 @@ from app.schemas.job import (
 )
 from app.services import job_service
 from app.services.jd_parser import generate_jd_async, parse_jd_to_criteria_async
+from app.core.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter(tags=["jobs"])
 
@@ -51,14 +53,19 @@ class GenerateJdResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="创建职位",
 )
-async def create_job(payload: JobCreate, session: SessionDep) -> JobRead:
-    job = await job_service.create_job(session, payload)
+async def create_job(
+    payload: JobCreate,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> JobRead:
+    job = await job_service.create_job(session, payload, owner_id=current_user.id)
     return JobRead.model_validate(job)
 
 
 @router.get("", response_model=JobListResponse, summary="职位列表")
 async def list_jobs(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     status_: JobStatus | None = Query(default=None, alias="status"),
     keyword: str | None = Query(default=None, max_length=60),
     page: int = Query(default=1, ge=1),
@@ -67,6 +74,7 @@ async def list_jobs(
     offset = (page - 1) * page_size
     total, rows = await job_service.list_jobs(
         session,
+        owner_id=current_user.id,
         status=status_,
         keyword=keyword,
         offset=offset,
@@ -102,21 +110,31 @@ async def generate_jd(payload: GenerateJdRequest) -> GenerateJdResponse:
 
 
 @router.get("/{job_id}", response_model=JobRead, summary="职位详情")
-async def get_job(job_id: str, session: SessionDep) -> JobRead:
-    job = await job_service.get_job(session, job_id)
+async def get_job(
+    job_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> JobRead:
+    job = await job_service.get_job(session, job_id, owner_id=current_user.id)
     if job is None:
-        raise HTTPException(status_code=404, detail="职位不存在")
+        raise HTTPException(status_code=404, detail="职位不存在或无权访问")
     return JobRead.model_validate(job)
 
 
 @router.patch("/{job_id}", response_model=JobRead, summary="更新职位")
 async def update_job(
-    job_id: str, payload: JobUpdate, session: SessionDep
+    job_id: str,
+    payload: JobUpdate,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
 ) -> JobRead:
-    job = await job_service.get_job(session, job_id)
+    job = await job_service.get_job(session, job_id, owner_id=current_user.id)
     if job is None:
-        raise HTTPException(status_code=404, detail="职位不存在")
-    updated = await job_service.update_job(session, job, payload)
+        raise HTTPException(status_code=404, detail="职位不存在或无权访问")
+    try:
+        updated = await job_service.update_job(session, job, payload, owner_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     return JobRead.model_validate(updated)
 
 
@@ -125,9 +143,13 @@ async def update_job(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="删除职位",
 )
-async def delete_job(job_id: str, session: SessionDep):
-    job = await job_service.get_job(session, job_id)
+async def delete_job(
+    job_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+):
+    job = await job_service.get_job(session, job_id, owner_id=current_user.id)
     if job is None:
-        raise HTTPException(status_code=404, detail="职位不存在")
+        raise HTTPException(status_code=404, detail="职位不存在或无权访问")
     await job_service.delete_job(session, job)
     return None

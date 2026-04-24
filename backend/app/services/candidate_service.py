@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.candidate import Candidate
 from app.models.file import ResumeFile
+from app.models.job import Job
 from app.schemas.candidate import CandidateUpdate
 
 
@@ -17,6 +18,7 @@ def _utcnow() -> datetime:
 
 async def list_candidates(
     session: AsyncSession,
+    owner_id: int,
     *,
     job_id: str | None = None,
     keyword: str | None = None,
@@ -24,7 +26,7 @@ async def list_candidates(
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[int, list[Candidate]]:
-    base = select(Candidate)
+    base = select(Candidate).join(Job, Candidate.job_id == Job.id).where(Job.owner_id == owner_id)
     if job_id:
         base = base.where(Candidate.job_id == job_id)
     if verified is not None:
@@ -50,8 +52,15 @@ async def list_candidates(
     return total, list(rows)
 
 
-async def get_candidate(session: AsyncSession, candidate_id: str) -> Candidate | None:
-    return await session.get(Candidate, candidate_id)
+async def get_candidate(session: AsyncSession, candidate_id: str, owner_id: int | None = None) -> Candidate | None:
+    """获取候选人详情，可选验证归属。"""
+    candidate = await session.get(Candidate, candidate_id)
+    if candidate and owner_id is not None:
+        # 验证候选人所属职位的归属
+        job = await session.get(Job, candidate.job_id)
+        if not job or job.owner_id != owner_id:
+            return None  # 无权访问
+    return candidate
 
 
 async def get_candidate_files(
@@ -80,11 +89,17 @@ async def update_candidate(
 
 
 async def reassign_file(
-    session: AsyncSession, file: ResumeFile, target_candidate: Candidate
+    session: AsyncSession, file: ResumeFile, target_candidate: Candidate, owner_id: int
 ) -> ResumeFile:
     """将单个文件改挂到另一个候选人（手动纠偏）。"""
     if file.job_id != target_candidate.job_id:
         raise ValueError("文件与目标候选人不属于同一职位")
+    
+    # 验证归属
+    job = await session.get(Job, file.job_id)
+    if not job or job.owner_id != owner_id:
+        raise ValueError("无权操作该文件")
+    
     file.candidate_id = target_candidate.id
     session.add(file)
     await session.commit()

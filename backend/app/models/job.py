@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -38,6 +38,14 @@ class Job(SQLModel, table=True):
     id: str = Field(
         default_factory=_uuid_str,
         sa_column=Column(String(36), primary_key=True, index=True),
+    )
+    owner_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
     )
     title: str = Field(sa_column=Column(String(120), nullable=False, index=True))
     raw_jd: str = Field(sa_column=Column(String, nullable=False))

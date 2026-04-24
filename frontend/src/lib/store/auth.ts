@@ -15,6 +15,8 @@ interface AuthState {
   login: (user: User) => void
   logout: () => void
   setUser: (user: User | null) => void
+  // 添加版本号，用于触发缓存失效
+  version: number
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -22,9 +24,10 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      login: (user) => set({ user, isAuthenticated: true }),
-      logout: () => set({ user: null, isAuthenticated: false }),
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      version: 0,
+      login: (user) => set((state) => ({ user, isAuthenticated: true, version: state.version + 1 })),
+      logout: () => set((state) => ({ user: null, isAuthenticated: false, version: state.version + 1 })),
+      setUser: (user) => set((state) => ({ user, isAuthenticated: !!user, version: state.version + 1 })),
     }),
     { name: 'auth-storage' }
   )

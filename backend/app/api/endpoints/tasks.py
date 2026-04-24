@@ -17,17 +17,19 @@ import logging
 import zipfile
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, SessionDep
 from app.core.rate_limit import limiter
+from app.core.auth import get_current_user
 from app.models.candidate import Candidate
 from app.models.file import FileType, ParseStatus, ResumeFile
 from app.models.job import Job
 from app.models.task import SortingTask, TaskStatus
+from app.models.user import User
 from app.schemas.task import TaskListResponse, TaskRead
 from app.services.zip_processor import run_pipeline
 
@@ -96,14 +98,17 @@ async def upload_zip(
     request: Request,
     response: Response,
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     job_id: str = Form(..., description="目标职位 ID"),
     file: UploadFile = File(..., description="简历 ZIP 压缩包"),
 ) -> TaskRead:
     settings = get_settings()
-    # 1. 校验职位
+    # 1. 校验职位并验证归属
     job = await session.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="职位不存在")
+    if job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权访问该职位")
 
     # 2. 读字节并校验大小
     data = await file.read()
@@ -150,11 +155,13 @@ async def upload_zip(
 @router.get("", response_model=TaskListResponse, summary="任务列表")
 async def list_tasks(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     job_id: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> TaskListResponse:
-    base = select(SortingTask)
+    # 通过 JOIN Job 表过滤用户权限
+    base = select(SortingTask).join(Job, SortingTask.job_id == Job.id).where(Job.owner_id == current_user.id)
     if job_id:
         base = base.where(SortingTask.job_id == job_id)
     total = (await session.execute(
@@ -170,10 +177,18 @@ async def list_tasks(
 
 
 @router.get("/{task_id}", response_model=TaskRead, summary="任务详情")
-async def get_task(task_id: str, session: SessionDep) -> TaskRead:
+async def get_task(
+    task_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> TaskRead:
     task = await session.get(SortingTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
+    # 验证归属
+    job = await session.get(Job, task.job_id)
+    if not job or job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权访问该任务")
     return TaskRead.model_validate(task)
 
 
@@ -203,10 +218,19 @@ class UnmatchedFilesResponse(BaseModel):
     response_model=UnmatchedFilesResponse,
     summary="列出任务中需要人工挂载的孤立文件（无 PII 的匿名候选人文件）",
 )
-async def list_unmatched_files(task_id: str, session: SessionDep) -> UnmatchedFilesResponse:
+async def list_unmatched_files(
+    task_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> UnmatchedFilesResponse:
     task = await session.get(SortingTask, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
+    
+    # 验证归属
+    job = await session.get(Job, task.job_id)
+    if not job or job.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权访问该任务")
 
     # 判定 "孤立文件"：
     # 1. candidate_id 为空；或

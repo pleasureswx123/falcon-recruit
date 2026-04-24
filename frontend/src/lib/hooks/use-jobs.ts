@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
+import { useEffect } from "react"
 
 import type { ApiError } from "@/lib/api/client"
 import {
@@ -24,6 +25,7 @@ import {
   parseJd,
   updateJob,
 } from "@/lib/api/jobs"
+import { useAuthStore } from "@/lib/store/auth"
 
 const QK = {
   all: ["jobs"] as const,
@@ -32,6 +34,14 @@ const QK = {
 }
 
 export function useJobs(query: JobListQuery = {}) {
+  const authVersion = useAuthStore((state) => state.version)
+  const queryClient = useQueryClient()
+  
+  // 当用户切换时，失效所有 jobs 缓存
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: QK.all })
+  }, [authVersion, queryClient])
+  
   return useQuery<JobListResponse, ApiError>({
     queryKey: QK.list(query),
     queryFn: () => listJobs(query),

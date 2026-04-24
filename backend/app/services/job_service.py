@@ -15,13 +15,14 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def create_job(session: AsyncSession, payload: JobCreate) -> Job:
+async def create_job(session: AsyncSession, payload: JobCreate, owner_id: int) -> Job:
     """创建职位；若未显式提供 criteria，则由 jd_parser 自动解析（LLM 优先，规则式降级）。"""
     criteria: JobCriteria = payload.criteria or await parse_jd_to_criteria_async(
         payload.raw_jd, title_hint=payload.title
     )
 
     job = Job(
+        owner_id=owner_id,
         title=payload.title.strip(),
         raw_jd=payload.raw_jd,
         criteria=criteria.model_dump(mode="json"),
@@ -33,20 +34,25 @@ async def create_job(session: AsyncSession, payload: JobCreate) -> Job:
     return job
 
 
-async def get_job(session: AsyncSession, job_id: str) -> Job | None:
-    return await session.get(Job, job_id)
+async def get_job(session: AsyncSession, job_id: str, owner_id: int | None = None) -> Job | None:
+    """获取职位详情，可选验证归属。"""
+    job = await session.get(Job, job_id)
+    if job and owner_id is not None and job.owner_id != owner_id:
+        return None  # 无权访问
+    return job
 
 
 async def list_jobs(
     session: AsyncSession,
+    owner_id: int,
     *,
     status: JobStatus | None = None,
     keyword: str | None = None,
     offset: int = 0,
     limit: int = 20,
 ) -> tuple[int, list[Job]]:
-    """列表查询，返回 (总数, 当前页)。"""
-    base = select(Job)
+    """列表查询，返回 (总数, 当前页)。只返回当前用户的职位。"""
+    base = select(Job).where(Job.owner_id == owner_id)
     if status is not None:
         base = base.where(Job.status == status)
     if keyword:
@@ -62,9 +68,13 @@ async def list_jobs(
 
 
 async def update_job(
-    session: AsyncSession, job: Job, payload: JobUpdate
+    session: AsyncSession, job: Job, payload: JobUpdate, owner_id: int
 ) -> Job:
     """部分更新。"""
+    # 验证归属
+    if job.owner_id != owner_id:
+        raise ValueError("无权修改该职位")
+    
     data = payload.model_dump(exclude_unset=True)
 
     if "title" in data and data["title"] is not None:

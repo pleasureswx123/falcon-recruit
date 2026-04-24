@@ -39,8 +39,12 @@ class ExportFilter:
     min_score: int | None = None
 
 
-async def _load_job(session: AsyncSession, job_id: str) -> Job | None:
-    return await session.get(Job, job_id)
+async def _load_job(session: AsyncSession, job_id: str, owner_id: int | None = None) -> Job | None:
+    """加载职位，可选验证归属。"""
+    job = await session.get(Job, job_id)
+    if job and owner_id is not None and job.owner_id != owner_id:
+        return None  # 无权访问
+    return job
 
 
 async def _load_candidates(
@@ -88,12 +92,12 @@ def _safe_member_name(name: str, used: set[str]) -> str:
 
 
 async def build_zip(
-    session: AsyncSession, f: ExportFilter
+    session: AsyncSession, f: ExportFilter, owner_id: int
 ) -> tuple[bytes, str, int]:
     """打包重命名文件为 ZIP。返回 (bytes, 建议文件名, 文件数)。"""
-    job = await _load_job(session, f.job_id)
+    job = await _load_job(session, f.job_id, owner_id)
     if job is None:
-        raise ValueError("职位不存在")
+        raise ValueError("职位不存在或无权访问")
 
     candidates = await _load_candidates(session, f)
     files = await _load_files_for(session, [c.id for c in candidates])
@@ -129,12 +133,12 @@ def _dim_score(report: dict, key: str) -> str:
 
 
 async def build_csv(
-    session: AsyncSession, f: ExportFilter
+    session: AsyncSession, f: ExportFilter, owner_id: int
 ) -> tuple[bytes, str, int]:
     """导出候选人评分表（UTF-8 BOM，Excel 友好）。"""
-    job = await _load_job(session, f.job_id)
+    job = await _load_job(session, f.job_id, owner_id)
     if job is None:
-        raise ValueError("职位不存在")
+        raise ValueError("职位不存在或无权访问")
 
     candidates = await _load_candidates(session, f)
 

@@ -9,9 +9,11 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.database import SessionDep
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.schemas.candidate import (
     CandidateDetail,
     CandidateFileRead,
@@ -29,6 +31,7 @@ router = APIRouter(tags=["candidates"])
 @router.get("", response_model=CandidateListResponse, summary="候选人列表")
 async def list_candidates(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     job_id: str | None = Query(default=None),
     keyword: str | None = Query(default=None, max_length=60),
     verified: bool | None = Query(default=None),
@@ -38,6 +41,7 @@ async def list_candidates(
     offset = (page - 1) * page_size
     total, rows = await cs.list_candidates(
         session,
+        owner_id=current_user.id,
         job_id=job_id,
         keyword=keyword,
         verified=verified,
@@ -51,10 +55,14 @@ async def list_candidates(
 
 
 @router.get("/{candidate_id}", response_model=CandidateDetail, summary="候选人详情")
-async def get_candidate(candidate_id: str, session: SessionDep) -> CandidateDetail:
-    candidate = await cs.get_candidate(session, candidate_id)
+async def get_candidate(
+    candidate_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> CandidateDetail:
+    candidate = await cs.get_candidate(session, candidate_id, owner_id=current_user.id)
     if candidate is None:
-        raise HTTPException(status_code=404, detail="候选人不存在")
+        raise HTTPException(status_code=404, detail="候选人不存在或无权访问")
     files = await cs.get_candidate_files(session, candidate_id)
     detail = CandidateDetail.model_validate(candidate)
     detail.files = [CandidateFileRead.model_validate(f) for f in files]
@@ -69,11 +77,12 @@ async def get_candidate(candidate_id: str, session: SessionDep) -> CandidateDeta
 async def get_candidate_report(
     candidate_id: str,
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     refresh: bool = Query(default=False, description="强制重新计算"),
 ) -> CandidateReport:
-    candidate = await cs.get_candidate(session, candidate_id)
+    candidate = await cs.get_candidate(session, candidate_id, owner_id=current_user.id)
     if candidate is None:
-        raise HTTPException(status_code=404, detail="候选人不存在")
+        raise HTTPException(status_code=404, detail="候选人不存在或无权访问")
     if refresh or not candidate.report:
         return await pp.compute_report(session, candidate)
     return CandidateReport.model_validate(candidate.report)
@@ -81,11 +90,14 @@ async def get_candidate_report(
 
 @router.patch("/{candidate_id}", response_model=CandidateRead, summary="更新候选人")
 async def update_candidate(
-    candidate_id: str, payload: CandidateUpdate, session: SessionDep
+    candidate_id: str,
+    payload: CandidateUpdate,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
 ) -> CandidateRead:
-    candidate = await cs.get_candidate(session, candidate_id)
+    candidate = await cs.get_candidate(session, candidate_id, owner_id=current_user.id)
     if candidate is None:
-        raise HTTPException(status_code=404, detail="候选人不存在")
+        raise HTTPException(status_code=404, detail="候选人不存在或无权访问")
     updated = await cs.update_candidate(session, candidate, payload)
     return CandidateRead.model_validate(updated)
 
@@ -96,16 +108,19 @@ async def update_candidate(
     summary="将文件改挂到该候选人",
 )
 async def reassign_file(
-    candidate_id: str, file_id: str, session: SessionDep
+    candidate_id: str,
+    file_id: str,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
 ) -> CandidateFileRead:
-    candidate = await cs.get_candidate(session, candidate_id)
+    candidate = await cs.get_candidate(session, candidate_id, owner_id=current_user.id)
     if candidate is None:
-        raise HTTPException(status_code=404, detail="候选人不存在")
+        raise HTTPException(status_code=404, detail="候选人不存在或无权访问")
     file = await cs.get_file(session, file_id)
     if file is None:
         raise HTTPException(status_code=404, detail="文件不存在")
     try:
-        updated = await cs.reassign_file(session, file, candidate)
+        updated = await cs.reassign_file(session, file, candidate, owner_id=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return CandidateFileRead.model_validate(updated)

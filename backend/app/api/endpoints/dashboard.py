@@ -8,14 +8,16 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import SessionDep
+from app.core.auth import get_current_user
 from app.models.candidate import Candidate
 from app.models.job import Job, JobStatus
 from app.models.task import SortingTask, TaskStatus
+from app.models.user import User
 from app.schemas.dashboard import (
     DashboardOverview,
     DashboardStats,
@@ -34,32 +36,51 @@ _RUNNING_STATUSES = (
 )
 
 
-async def _compute_stats(session: AsyncSession) -> DashboardStats:
+async def _compute_stats(session: AsyncSession, owner_id: int) -> DashboardStats:
     async def count(stmt) -> int:
         result = await session.execute(stmt)
         return int(result.scalar_one() or 0)
 
-    jobs_total = await count(select(func.count()).select_from(Job))
-    jobs_active = await count(
-        select(func.count()).select_from(Job).where(Job.status == JobStatus.ACTIVE)
+    # 所有统计都基于当前用户的职位进行过滤
+    jobs_total = await count(
+        select(func.count()).select_from(Job).where(Job.owner_id == owner_id)
     )
+    jobs_active = await count(
+        select(func.count())
+        .select_from(Job)
+        .where(Job.owner_id == owner_id)
+        .where(Job.status == JobStatus.ACTIVE)
+    )
+    
+    # 通过 JOIN Job 过滤候选人
     candidates_total = await count(
-        select(func.count()).select_from(Candidate)
+        select(func.count())
+        .select_from(Candidate)
+        .join(Job, Candidate.job_id == Job.id)
+        .where(Job.owner_id == owner_id)
     )
     candidates_unverified = await count(
         select(func.count())
         .select_from(Candidate)
+        .join(Job, Candidate.job_id == Job.id)
+        .where(Job.owner_id == owner_id)
         .where(Candidate.is_verified.is_(False))
     )
     high_score_count = await count(
         select(func.count())
         .select_from(Candidate)
+        .join(Job, Candidate.job_id == Job.id)
+        .where(Job.owner_id == owner_id)
         .where(Candidate.score.is_not(None))
         .where(Candidate.score >= _HIGH_SCORE_THRESHOLD)
     )
+    
+    # 通过 JOIN Job 过滤任务
     tasks_running = await count(
         select(func.count())
         .select_from(SortingTask)
+        .join(Job, SortingTask.job_id == Job.id)
+        .where(Job.owner_id == owner_id)
         .where(SortingTask.status.in_(_RUNNING_STATUSES))
     )
 
@@ -74,11 +95,12 @@ async def _compute_stats(session: AsyncSession) -> DashboardStats:
 
 
 async def _load_top_candidates(
-    session: AsyncSession, limit: int
+    session: AsyncSession, owner_id: int, limit: int
 ) -> list[TopCandidate]:
     stmt = (
         select(Candidate, Job.title)
         .join(Job, Job.id == Candidate.job_id, isouter=True)
+        .where(Job.owner_id == owner_id)
         .where(Candidate.score.is_not(None))
         .order_by(Candidate.score.desc(), Candidate.updated_at.desc())
         .limit(limit)
@@ -103,11 +125,12 @@ async def _load_top_candidates(
 
 
 async def _load_recent_tasks(
-    session: AsyncSession, limit: int
+    session: AsyncSession, owner_id: int, limit: int
 ) -> list[RecentTask]:
     stmt = (
         select(SortingTask, Job.title)
         .join(Job, Job.id == SortingTask.job_id, isouter=True)
+        .where(Job.owner_id == owner_id)
         .order_by(SortingTask.created_at.desc())
         .limit(limit)
     )
@@ -137,18 +160,22 @@ async def _load_recent_tasks(
 @router.get("/overview", response_model=DashboardOverview, summary="首页一次性概览")
 async def get_overview(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     top_limit: int = Query(default=10, ge=1, le=50),
     recent_limit: int = Query(default=5, ge=1, le=20),
 ) -> DashboardOverview:
-    stats = await _compute_stats(session)
-    top = await _load_top_candidates(session, top_limit)
-    recent = await _load_recent_tasks(session, recent_limit)
+    stats = await _compute_stats(session, owner_id=current_user.id)
+    top = await _load_top_candidates(session, owner_id=current_user.id, limit=top_limit)
+    recent = await _load_recent_tasks(session, owner_id=current_user.id, limit=recent_limit)
     return DashboardOverview(stats=stats, top_candidates=top, recent_tasks=recent)
 
 
 @router.get("/stats", response_model=DashboardStats, summary="概览数值统计")
-async def get_stats(session: SessionDep) -> DashboardStats:
-    return await _compute_stats(session)
+async def get_stats(
+    session: SessionDep,
+    current_user: User = Depends(get_current_user),
+) -> DashboardStats:
+    return await _compute_stats(session, owner_id=current_user.id)
 
 
 @router.get(
@@ -158,9 +185,10 @@ async def get_stats(session: SessionDep) -> DashboardStats:
 )
 async def get_top_candidates(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     limit: int = Query(default=10, ge=1, le=50),
 ) -> list[TopCandidate]:
-    return await _load_top_candidates(session, limit)
+    return await _load_top_candidates(session, owner_id=current_user.id, limit=limit)
 
 
 @router.get(
@@ -170,6 +198,7 @@ async def get_top_candidates(
 )
 async def get_recent_tasks(
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     limit: int = Query(default=5, ge=1, le=20),
 ) -> list[RecentTask]:
-    return await _load_recent_tasks(session, limit)
+    return await _load_recent_tasks(session, owner_id=current_user.id, limit=limit)

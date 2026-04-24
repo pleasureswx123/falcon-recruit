@@ -8,12 +8,15 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.core.config import get_settings
 from app.core.database import SessionDep
 from app.core.rate_limit import limiter
+from app.core.auth import get_current_user
+from app.models.job import Job
+from app.models.user import User
 from app.services import export_service as es
 from app.services.export_service import ExportFilter
 
@@ -34,6 +37,7 @@ async def export_zip(
     request: Request,
     job_id: str,
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     verified_only: bool = Query(
         default=False, description="仅导出已人工核验的候选人"
     ),
@@ -41,6 +45,11 @@ async def export_zip(
         default=None, ge=0, le=100, description="仅导出达到此分数的候选人"
     ),
 ) -> Response:
+    # 验证职位归属
+    job = await session.get(Job, job_id)
+    if not job or job.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="职位不存在或无权访问")
+    
     try:
         data, filename, count = await es.build_zip(
             session,
@@ -49,6 +58,7 @@ async def export_zip(
                 verified_only=verified_only,
                 min_score=min_score,
             ),
+            owner_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -74,9 +84,15 @@ async def export_csv(
     request: Request,
     job_id: str,
     session: SessionDep,
+    current_user: User = Depends(get_current_user),
     verified_only: bool = Query(default=False),
     min_score: int | None = Query(default=None, ge=0, le=100),
 ) -> Response:
+    # 验证职位归属
+    job = await session.get(Job, job_id)
+    if not job or job.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="职位不存在或无权访问")
+    
     try:
         data, filename, count = await es.build_csv(
             session,
@@ -85,6 +101,7 @@ async def export_csv(
                 verified_only=verified_only,
                 min_score=min_score,
             ),
+            owner_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
