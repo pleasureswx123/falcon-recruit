@@ -125,8 +125,9 @@ async def update_job(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="删除职位",
 )
-async def delete_job(job_id: str, session: SessionDep) -> None:
+async def delete_job(job_id: str, session: SessionDep):
     job = await job_service.get_job(session, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="职位不存在")
     await job_service.delete_job(session, job)
+    return None

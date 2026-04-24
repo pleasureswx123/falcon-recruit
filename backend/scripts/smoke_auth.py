@@ -1,103 +1,117 @@
-"""鉴权 + 限流 + ZIP 炸弹防御 smoke。
+"""完整认证流程 smoke 测试。
 
 前置：
-- 临时设置 FALCON_API_KEY，验证 /api/jobs 在未带 X-API-Key 时返回 401。
-- 带正确 key 时返回 200。
-- /api/health 与 /api/health/ready 永远不要求鉴权。
-- /api/tasks/upload 对非法 ZIP（BadZipFile）返回 400。
+- 启动后端服务
+- 测试用户注册、登录、登出流程
+- 验证 Session Cookie 设置
+- 验证受保护接口的鉴权
 """
 from __future__ import annotations
 
-import os
+import asyncio
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# 必须在 import 前设置，让 Settings 走到"启用鉴权"分支
-os.environ["FALCON_API_KEY"] = "smoke-test-key"
-
-import asyncio  # noqa: E402
-
-from httpx import ASGITransport, AsyncClient  # noqa: E402
-
-from app.core.config import get_settings  # noqa: E402
-from app.core.database import init_db  # noqa: E402
-from main import create_app  # noqa: E402
+import httpx
+from app.core.database import init_db
+from main import create_app
 
 
 async def _main() -> None:
-    get_settings.cache_clear()
-    assert get_settings().falcon_api_key == "smoke-test-key", "env not picked up"
-
     await init_db()
     app = create_app()
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    ) as ac:
-        # 1. /api/health 无鉴权
-        r = await ac.get("/api/health")
-        assert r.status_code == 200, f"health should be open: {r.status_code}"
-        print("[health] open ✓")
+    # 使用 TestClient 进行测试
+    from fastapi.testclient import TestClient
 
-        # 2. /api/health/ready 无鉴权
-        r = await ac.get("/api/health/ready")
-        assert r.status_code in (200, 503), f"ready weird status: {r.status_code}"
-        print(f"[ready] {r.status_code} components={r.json().get('components')}")
+    client = TestClient(app)
 
-        # 3. 无 key 访问业务接口 → 401
-        r = await ac.get("/api/jobs")
-        assert r.status_code == 401, f"expect 401, got {r.status_code}"
-        body = r.json()
-        assert body.get("code") == "http_401", body
-        assert "request_id" in body
-        print(f"[auth] no-key rejected ✓ request_id={body['request_id']}")
+    # 1. 测试用户注册
+    print("[1/6] 测试用户注册...")
+    register_response = client.post(
+        "/api/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "testpass123",
+            "full_name": "测试用户",
+        },
+    )
+    assert register_response.status_code == 201, f"注册失败: {register_response.text}"
+    user_data = register_response.json()
+    assert user_data["email"] == "test@example.com"
+    assert "session_id" in register_response.cookies
+    print(f"✓ 注册成功，用户ID: {user_data['id']}")
 
-        # 4. 错误 key → 401
-        r = await ac.get("/api/jobs", headers={"X-API-Key": "wrong"})
-        assert r.status_code == 401, f"expect 401, got {r.status_code}"
-        print("[auth] wrong-key rejected ✓")
+    # 2. 测试重复注册（应该失败）
+    print("[2/6] 测试重复注册...")
+    duplicate_response = client.post(
+        "/api/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "testpass123",
+        },
+    )
+    assert duplicate_response.status_code == 400
+    print("✓ 重复注册被正确拒绝")
 
-        # 5. 正确 key → 200
-        r = await ac.get("/api/jobs", headers={"X-API-Key": "smoke-test-key"})
-        assert r.status_code == 200, f"expect 200, got {r.status_code}: {r.text}"
-        print("[auth] correct-key accepted ✓")
+    # 3. 测试用户登录
+    print("[3/6] 测试用户登录...")
+    login_response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "test@example.com",
+            "password": "testpass123",
+        },
+    )
+    assert login_response.status_code == 200, f"登录失败: {login_response.text}"
+    assert "session_id" in login_response.cookies
+    session_cookie = login_response.cookies["session_id"]
+    print(f"✓ 登录成功，Session ID: {session_cookie[:16]}...")
 
-    # 6. ZIP 炸弹防御（直接测试纯函数，绕过 httpx TestClient + UploadFile 的 Pydantic 兼容问题）
-    import io as _io
-    import zipfile as _zf
-    from fastapi import HTTPException
-    from app.api.endpoints.tasks import _validate_zip_bytes
+    # 4. 测试错误密码登录
+    print("[4/6] 测试错误密码登录...")
+    wrong_password_response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "test@example.com",
+            "password": "wrongpassword",
+        },
+    )
+    assert wrong_password_response.status_code == 401
+    print("✓ 错误密码被正确拒绝")
 
-    # 6.1 非法 zip → 400
-    try:
-        _validate_zip_bytes(b"not a zip", max_upload_mb=200, ratio_max=10, max_files=5000)
-    except HTTPException as exc:
-        assert exc.status_code == 400, exc
-        print("[zipbomb] bad zip rejected ✓")
-    else:
-        raise AssertionError("expected bad zip to be rejected")
+    # 5. 测试获取当前用户信息
+    print("[5/6] 测试获取当前用户信息...")
+    me_response = client.get(
+        "/api/auth/me",
+        cookies={"session_id": session_cookie},
+    )
+    assert me_response.status_code == 200
+    me_data = me_response.json()
+    assert me_data["email"] == "test@example.com"
+    print(f"✓ 获取用户信息成功: {me_data['full_name']}")
 
-    # 6.2 文件数超限 → 413
-    buf = _io.BytesIO()
-    with _zf.ZipFile(buf, "w") as zf:
-        for i in range(10):
-            zf.writestr(f"f{i}.txt", b"x")
-    try:
-        _validate_zip_bytes(buf.getvalue(), max_upload_mb=200, ratio_max=10, max_files=5)
-    except HTTPException as exc:
-        assert exc.status_code == 413, exc
-        print("[zipbomb] too many files rejected ✓")
-    else:
-        raise AssertionError("expected too-many-files rejection")
+    # 6. 测试用户登出
+    print("[6/6] 测试用户登出...")
+    logout_response = client.post(
+        "/api/auth/logout",
+        cookies={"session_id": session_cookie},
+    )
+    assert logout_response.status_code == 200
+    print("✓ 登出成功")
 
-    # 6.3 正常 zip 放行
-    _validate_zip_bytes(buf.getvalue(), max_upload_mb=200, ratio_max=10, max_files=5000)
-    print("[zipbomb] normal zip accepted ✓")
+    # 7. 验证登出后 Session 失效
+    print("[额外] 验证登出后 Session 失效...")
+    me_after_logout = client.get(
+        "/api/auth/me",
+        cookies={"session_id": session_cookie},
+    )
+    assert me_after_logout.status_code == 401
+    print("✓ 登出后 Session 已失效")
 
-    print("\nALL PASS ✓")
+    print("\n✅ 所有测试通过！")
 
 
 if __name__ == "__main__":

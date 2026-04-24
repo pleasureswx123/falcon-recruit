@@ -7,54 +7,12 @@ import axios, { type AxiosError, type AxiosInstance } from "axios"
  */
 export const API_BASE_URL = "/api"
 
-const API_KEY_STORAGE = "falcon_api_key"
-
 export interface ApiError {
   status: number
   code?: string
   message: string
   detail?: unknown
   requestId?: string
-}
-
-export function getApiKey(): string | null {
-  if (typeof window === "undefined") return null
-  return window.localStorage.getItem(API_KEY_STORAGE)
-}
-
-export function setApiKey(key: string): void {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(API_KEY_STORAGE, key)
-}
-
-export function clearApiKey(): void {
-  if (typeof window === "undefined") return
-  window.localStorage.removeItem(API_KEY_STORAGE)
-}
-
-// 401 时仅弹一次 prompt，防止并发请求刷屏
-let pendingKeyPrompt: Promise<string | null> | null = null
-
-function promptForApiKey(): Promise<string | null> {
-  if (typeof window === "undefined") return Promise.resolve(null)
-  const existing = pendingKeyPrompt
-  if (existing) return existing
-  const task = new Promise<string | null>((resolve) => {
-    const input = window.prompt(
-      "该接口需要鉴权。请粘贴 Falcon API Key（联系管理员获取）：",
-      ""
-    )
-    if (input && input.trim()) {
-      setApiKey(input.trim())
-      resolve(input.trim())
-    } else {
-      resolve(null)
-    }
-  }).finally(() => {
-    pendingKeyPrompt = null
-  })
-  pendingKeyPrompt = task
-  return task
 }
 
 function createClient(): AxiosInstance {
@@ -64,15 +22,8 @@ function createClient(): AxiosInstance {
     headers: {
       "Content-Type": "application/json",
     },
-  })
-
-  instance.interceptors.request.use((config) => {
-    const key = getApiKey()
-    if (key) {
-      config.headers = config.headers ?? {}
-      config.headers["X-API-Key"] = key
-    }
-    return config
+    // 允许携带 Cookie
+    withCredentials: true,
   })
 
   instance.interceptors.response.use(
@@ -84,17 +35,13 @@ function createClient(): AxiosInstance {
         (data && typeof data.request_id === "string" ? data.request_id : undefined) ??
         (error.response?.headers?.["x-request-id"] as string | undefined)
 
-      // 401：清掉旧 key，弹 prompt 让用户补录，并自动重试一次
-      if (status === 401 && error.config && !(error.config as { _retried?: boolean })._retried) {
-        clearApiKey()
-        const newKey = await promptForApiKey()
-        if (newKey) {
-          const retryConfig = error.config as typeof error.config & { _retried?: boolean }
-          retryConfig._retried = true
-          retryConfig.headers = retryConfig.headers ?? {}
-          retryConfig.headers["X-API-Key"] = newKey
-          return instance.request(retryConfig)
-        }
+      // 401：清除本地用户状态并重定向到登录页
+      if (status === 401 && typeof window !== "undefined") {
+        // 动态导入避免循环依赖
+        import("@/lib/store/auth").then(({ useAuthStore }) => {
+          useAuthStore.getState().logout()
+          window.location.href = "/login"
+        })
       }
 
       const message =

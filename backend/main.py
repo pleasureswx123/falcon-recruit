@@ -66,11 +66,6 @@ async def lifespan(app: FastAPI):
         logger.info("skip create_all in production - use alembic instead")
     # 清理因上次进程崩溃/重启遗留的僵尸任务
     await _reconcile_stale_tasks()
-    # 打印鉴权模式，便于运维确认
-    if not settings.falcon_api_key:
-        logger.warning(
-            "FALCON_API_KEY not set: API is running in OPEN mode (dev/smoke only)"
-        )
     yield
     await dispose_db()
 

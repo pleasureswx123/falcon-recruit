@@ -41,9 +41,6 @@ NGINX_PORT=80
 # 数据库密码（生产环境必须修改为强密码）
 POSTGRES_PASSWORD=your_strong_password_here
 
-# API Key（生产环境必填）
-FALCON_API_KEY=your_api_key_here
-
 # LLM 配置（可选）
 OPENAI_API_KEY=your_llm_key
 OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3

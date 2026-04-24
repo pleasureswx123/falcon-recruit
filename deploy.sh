@@ -17,7 +17,6 @@ if [ ! -f ".env" ]; then
     echo ""
     echo "[重要] 请编辑 .env 文件，配置以下内容："
     echo "  - POSTGRES_PASSWORD (数据库密码)"
-    echo "  - FALCON_API_KEY (API 密钥)"
     echo "  - OPENAI_API_KEY (LLM API 密钥，可选)"
     echo ""
     read -p "按回车键继续..."

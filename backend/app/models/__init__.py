@@ -3,8 +3,10 @@ from app.models.candidate import Candidate
 from app.models.file import FileType, ParseStatus, ResumeFile
 from app.models.job import Job, JobStatus
 from app.models.task import SortingTask, TaskStatus
+from app.models.user import User
 
 __all__ = [
+    "User",
     "Candidate",
     "FileType",
     "ParseStatus",

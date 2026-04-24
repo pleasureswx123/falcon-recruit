@@ -30,6 +30,10 @@ filetype>=1.2.0
 # FastAPI multipart 表单上传（ZIP UploadFile 需要）
 python-multipart>=0.0.20
 
+# 认证与安全（Phase 6：完整登录注册系统）
+bcrypt>=4.0.0,<5.0.0
+email-validator>=2.2.0,<3.0.0  # Pydantic EmailStr 支持
+
 # LLM (Phase 4 启用)
 # openai>=1.60.0
 

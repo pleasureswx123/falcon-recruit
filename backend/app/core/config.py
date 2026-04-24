@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     )
     database_echo: bool = Field(default=False)
 
-    # Redis（Phase 3 启用）
+    # Redis（Phase 3 启用，Phase 6 用于 Session 存储）
+    # 开发环境：redis://127.0.0.1:6379/0（宿主机映射端口）
+    # 生产环境：redis://redis:6379/0（Docker 容器网络）
     redis_url: str | None = Field(default=None)
 
     # 存储路径（Phase 3：ZIP 解压与重命名产物）
@@ -47,8 +49,6 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None)
     llm_model: str = Field(default="gpt-4o")
 
-    # 安全：API Key（留空则不启用鉴权，便于本地 smoke；生产必须设置）
-    falcon_api_key: str | None = Field(default=None)
     # 限流（per-IP，单位/分钟）
     rate_limit_upload: str = Field(default="10/minute")
     rate_limit_export: str = Field(default="30/minute")

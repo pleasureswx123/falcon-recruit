@@ -1,7 +1,8 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Bell, LogOut, User } from "lucide-react"
+import { toast } from "sonner"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useAuthStore } from "@/lib/store/auth"
+import { authApi } from "@/lib/api/auth"
 
 const titleMap: Record<string, string> = {
   "/": "Dashboard",
@@ -27,12 +30,31 @@ function resolveTitle(pathname: string): string {
   const prefix = Object.keys(titleMap)
     .filter((k) => k !== "/" && pathname.startsWith(k))
     .sort((a, b) => b.length - a.length)[0]
-  return prefix ? titleMap[prefix] : "未知页面"
+  return prefix ? titleMap[prefix] : "页面"
 }
 
 export function Header() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuthStore()
   const title = resolveTitle(pathname)
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout()
+      logout()
+      toast.success("已登出")
+      router.push("/login")
+    } catch {
+      // 即使后端失败，也清除本地状态
+      logout()
+      router.push("/login")
+    }
+  }
+
+  // 获取用户显示名称
+  const displayName = user?.full_name || user?.email || "用户"
+  const avatarFallback = displayName.charAt(0).toUpperCase()
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-6">
@@ -47,21 +69,21 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 px-2">
               <Avatar className="h-7 w-7">
-                <AvatarImage src="" alt="HR" />
-                <AvatarFallback className="text-xs">HR</AvatarFallback>
+                <AvatarImage src="" alt={displayName} />
+                <AvatarFallback className="text-xs">{avatarFallback}</AvatarFallback>
               </Avatar>
-              <span className="text-sm">管理员</span>
+              <span className="text-sm">{displayName}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>我的账号</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <User className="mr-2 h-4 w-4" />
-              个人资料
+              <span className="text-xs text-gray-500">{user?.email}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               退出登录
             </DropdownMenuItem>

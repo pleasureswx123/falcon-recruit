@@ -34,16 +34,13 @@
 ```bash
 # 基础设施
 POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_PORT
-REDIS_PORT
+REDIS_PORT, REDIS_URL
 
 # 生产服务
 NGINX_PORT, MAX_UPLOAD_MB
 
 # LLM 配置（注入到 backend 容器）
 OPENAI_API_KEY, OPENAI_BASE_URL, LLM_MODEL
-
-# 安全加固
-FALCON_API_KEY
 ```
 
 **优先级：** Docker Compose 环境变量 > config.py 默认值
@@ -80,9 +77,6 @@ STORAGE_ROOT, MAX_UPLOAD_MB
 
 # LLM
 OPENAI_API_KEY, OPENAI_BASE_URL, LLM_MODEL
-
-# 安全
-FALCON_API_KEY, RATE_LIMIT_*, ZIP_*
 ```
 
 **优先级：** 环境变量 > `.env` 文件 > config.py 默认值
@@ -212,18 +206,6 @@ DATABASE_URL=postgresql+asyncpg://falcon:falcon_dev_pw@127.0.0.1:5432/falcon
 POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
 ```
 如果未设置，Docker Compose 会拒绝启动。
-
-### 3. FALCON_API_KEY
-
-**生产环境强制要求：**
-```yaml
-# docker-compose.prod.yml 第27行
-FALCON_API_KEY: ${FALCON_API_KEY:?FALCON_API_KEY must be set in .env}
-```
-
-**本地开发可选：**
-- 留空则 API 不鉴权（便于 smoke test）
-- 设置后需要在前端请求头中添加 `X-API-Key`
 
 ---
 
