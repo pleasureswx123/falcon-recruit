@@ -9,7 +9,7 @@
 ```
 用户浏览器
     ↓
-http://your-domain.com:80 (Nginx)
+http://your-domain.com:8080 (Nginx)
     ↓
     ├─ /          → 前端 Next.js 应用 (container: frontend:3000)
     └─ /api/      → 后端 FastAPI 服务 (container: backend:8000)
@@ -18,7 +18,7 @@ http://your-domain.com:80 (Nginx)
 ### 核心优势
 
 1. **彻底解决跨域**：前后端在同一域名下，浏览器不会触发 CORS 限制
-2. **统一入口**：只需暴露一个端口（80），简化防火墙配置
+2. **统一入口**：只需暴露一个端口（8080），简化防火墙配置
 3. **安全性提升**：后端服务不直接暴露在公网
 4. **性能优化**：Nginx 可以处理静态资源缓存、负载均衡等
 
@@ -35,8 +35,8 @@ cp .env.example .env
 关键配置项：
 
 ```env
-# Nginx 对外端口（默认 80）
-NGINX_PORT=80
+# Nginx 对外端口（默认 8080，避免与现有服务冲突）
+NGINX_PORT=8080
 
 # 数据库密码（生产环境必须修改为强密码）
 POSTGRES_PASSWORD=your_strong_password_here
@@ -293,18 +293,80 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker image prune -f
 ```
 
+## 🌐 一键远程部署
+
+项目提供了便捷的一键远程部署功能，支持从本地开发机直接部署到远程服务器。
+
+### 1. 脚本说明
+
+- **Linux/macOS**: `scripts/deploy-to-server.sh`
+- **Windows**: `scripts/deploy-to-server.ps1`
+
+### 2. 首次部署
+
+首次部署前需要配置服务器环境：
+
+```bash
+# 检查服务器环境是否满足要求
+bash scripts/server-init.sh
+```
+
+### 3. 配置服务器
+
+确保服务器满足以下条件：
+
+1. 安装了 Docker 和 Docker Compose
+2. 有足够的磁盘空间（建议 5GB 以上）
+3. 端口未被占用（默认使用 8080 端口）
+
+### 4. 一键部署
+
+```bash
+# Linux/macOS
+bash scripts/deploy-to-server.sh
+
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\\deploy-to-server.ps1
+```
+
+### 5. 部署后验证
+
+脚本会自动：
+
+1. 同步代码到远程服务器
+2. 构建 Docker 镜像
+3. 启动所有服务
+4. 等待服务就绪
+5. 验证部署结果
+
+### 6. 管理命令
+
+- **查看服务状态**: `docker compose -p falcon-recruit ps`
+- **查看日志**: `docker logs falcon-nginx`
+- **停止服务**: `docker compose -p falcon-recruit down`
+- **重启服务**: `docker compose -p falcon-recruit restart`
+
+### 7. 回滚部署
+
+如果部署出现问题，可以使用回滚脚本：
+
+```bash
+bash scripts/rollback.sh
+```
+
 ## ✅ 验证清单
 
 部署完成后，请逐项验证：
 
 - [ ] 所有容器正常运行 (`docker compose ps`)
-- [ ] 前端页面可访问 (http://your-server-ip/)
-- [ ] 后端 API 可访问 (http://your-server-ip/api/health)
+- [ ] 前端页面可访问 (http://your-server-ip:8080/)
+- [ ] 后端 API 可访问 (http://your-server-ip:8080/api/health)
 - [ ] 无跨域错误（浏览器控制台检查）
 - [ ] 文件上传功能正常
 - [ ] AI 功能正常（如果配置了 LLM）
 - [ ] 数据库连接正常
 - [ ] Redis 连接正常
+- [ ] 现有服务不受影响
 
 ## 📝 注意事项
 
@@ -313,8 +375,8 @@ docker image prune -f
    - 生产环境：通过 Nginx 统一入口，无跨域问题
 
 2. **端口冲突**
-   - 确保宿主机 80 端口未被占用
-   - 如需修改，调整 `NGINX_PORT` 环境变量
+   - 确保宿主机 8080 端口未被占用
+   - 如需修改，调整 `.env` 文件中的 `NGINX_PORT` 变量
 
 3. **数据持久化**
    - 数据库数据已通过 Docker Volume 持久化
@@ -334,19 +396,6 @@ docker image prune -f
    - 例如：`/api/jobs`, `/api/candidates`, `/api/tasks`
    - 健康检查：`/api/health`
    - API 文档：`/api/docs`
-
-## ✅ 验证清单
-
-部署完成后，请逐项验证：
-
-- [ ] 所有容器正常运行 (`docker compose ps`)
-- [ ] 前端页面可访问 (http://your-server-ip/)
-- [ ] 后端 API 可访问 (http://your-server-ip/api/health)
-- [ ] 无跨域错误（浏览器控制台检查）
-- [ ] 文件上传功能正常
-- [ ] AI 功能正常（如果配置了 LLM）
-- [ ] 数据库连接正常
-- [ ] Redis 连接正常
 
 ---
 

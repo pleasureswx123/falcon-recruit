@@ -5,7 +5,12 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Alpine 下部分原生依赖需要 libc6-compat
-RUN apk add --no-cache libc6-compat
+# 配置 Alpine 国内镜像源（阿里云）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
+    && apk add --no-cache libc6-compat
+
+# 配置 npm 国内镜像源（阿里云）
+RUN npm config set registry https://registry.npmmirror.com
 
 COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund

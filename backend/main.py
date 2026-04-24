@@ -59,13 +59,16 @@ async def _reconcile_stale_tasks() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    # 生产环境不自动 create_all，应通过 alembic upgrade head 管理 schema
-    if settings.debug:
-        await init_db()
-    else:
-        logger.info("skip create_all in production - use alembic instead")
-    # 清理因上次进程崩溃/重启遗留的僵尸任务
-    await _reconcile_stale_tasks()
+    # 自动建表（开发和生产都执行，确保新部署的数据库有表结构）
+    await init_db()
+    logger.info("Database tables initialized")
+    
+    # 清理因上次进程崩溃/重启遗留的僵尸任务（失败不阻断启动）
+    try:
+        await _reconcile_stale_tasks()
+    except Exception as e:
+        logger.warning("Failed to reconcile stale tasks (may be first run): %s", e)
+    
     yield
     await dispose_db()
 

@@ -10,6 +10,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /build
 
+# 配置 Debian 国内镜像源（阿里云）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
+
 # 配置 pip 国内镜像源
 COPY pip.conf /root/.pip/pip.conf
 
@@ -30,6 +34,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
+
+# 配置 Debian 国内镜像源（阿里云）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
 
 # 配置 pip 国内镜像源（供运行时可能的 pip 安装使用）
 COPY pip.conf /root/.pip/pip.conf

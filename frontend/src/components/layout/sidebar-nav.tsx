@@ -6,7 +6,6 @@ import {
   Briefcase,
   Inbox,
   LayoutDashboard,
-  Settings,
   Users,
 } from "lucide-react"
 
