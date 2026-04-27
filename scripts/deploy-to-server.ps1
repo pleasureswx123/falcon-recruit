@@ -79,7 +79,7 @@ if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
     --exclude=.vscode `
     --exclude=.idea `
     --exclude=.env `
-    -C (Split-Path $ROOT -Parent) (Split-Path $ROOT -Leaf)
+    -C $ROOT .
 
 if ($LASTEXITCODE -ne 0) { Write-Fail "打包失败" }
 
