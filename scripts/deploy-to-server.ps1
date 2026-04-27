@@ -120,10 +120,33 @@ Write-Host "  在服务器上执行部署命令..." -ForegroundColor Gray
 
 # 重要：必须同时使用 docker-compose.yml 和 docker-compose.prod.yml
 # --build 强制重新构建所有镜像（包括 nginx），确保 Cookie 转发配置生效
-$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+# 1. 先启动数据库容器
+$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml up -d postgres redis"
 
+Write-Host "  启动数据库容器..." -ForegroundColor Gray
 & ssh @SSH_OPTS $SSH_TARGET $deployCommands
-if ($LASTEXITCODE -ne 0) { Write-Fail "服务器端部署失败，请检查日志" }
+if ($LASTEXITCODE -ne 0) { Write-Fail "数据库容器启动失败" }
+Write-OK "数据库容器已启动"
+
+# 2. 等待数据库就绪
+Write-Host "  等待数据库就绪..." -ForegroundColor Gray
+Start-Sleep -Seconds 5
+
+# 3. 执行数据库迁移（自动添加缺失的字段）
+Write-Host "  执行数据库迁移（确保表结构同步）..." -ForegroundColor Gray
+$migrateCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && docker compose -p $ProjectName -f docker-compose.prod.yml run --rm backend python scripts/migrate_add_owner_id.py"
+& ssh @SSH_OPTS $SSH_TARGET $migrateCmd
+if ($LASTEXITCODE -ne 0) { 
+    Write-Warn "数据库迁移失败或已执行过（可忽略）"
+} else {
+    Write-OK "数据库迁移完成"
+}
+
+# 4. 启动所有服务
+Write-Host "  启动所有服务..." -ForegroundColor Gray
+$startCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+& ssh @SSH_OPTS $SSH_TARGET $startCmd
+if ($LASTEXITCODE -ne 0) { Write-Fail "服务启动失败，请检查日志" }
 
 Write-OK "服务器端部署完成"
 
