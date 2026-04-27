@@ -1,5 +1,4 @@
 import Image from "next/image"
-import { Logo } from "@/components/layout/logo"
 import { SidebarNav } from "@/components/layout/sidebar-nav"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"

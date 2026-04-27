@@ -103,9 +103,10 @@ Write-OK ".env 上传完成"
 # -------------------------------------------------------
 Write-Step "Step 3.5/5: 清理服务器旧部署..."
 
-Write-Host "  停止并移除旧容器..." -ForegroundColor Gray
+Write-Host "  停止并移除旧容器（保留数据卷）..." -ForegroundColor Gray
+# 重要：down 命令不加 -v 参数，确保 postgres-data 和 redis-data 卷不被删除
 & ssh @SSH_OPTS $SSH_TARGET "docker compose -p $ProjectName down 2>/dev/null || true"
-Write-OK "旧容器已停止"
+Write-OK "旧容器已停止（数据卷已保留）"
 
 Write-Host "  清理旧代码目录..." -ForegroundColor Gray
 & ssh @SSH_OPTS $SSH_TARGET "rm -rf ${RemoteDir} && mkdir -p ${RemoteDir}"
@@ -118,10 +119,9 @@ Write-Step "Step 4/5: 在服务器上解压并启动服务..."
 
 Write-Host "  在服务器上执行部署命令..." -ForegroundColor Gray
 
-# 直接在 SSH 会话中执行部署命令（使用单行避免换行符问题）
-# 注意：tar 解压后会创建 falcon-recruit 子目录，需要进入该目录
 # 重要：必须同时使用 docker-compose.yml 和 docker-compose.prod.yml
-$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && cd falcon-recruit && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+# --build 强制重新构建所有镜像（包括 nginx），确保配置更新生效
+$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
 
 & ssh @SSH_OPTS $SSH_TARGET $deployCommands
 if ($LASTEXITCODE -ne 0) { Write-Fail "服务器端部署失败，请检查日志" }
@@ -134,11 +134,30 @@ Write-OK "服务器端部署完成"
 Write-Step "Step 5/5: 验证服务..."
 Start-Sleep -Seconds 10
 
+# 检查数据库容器状态
+Write-Host "  检查数据库容器状态..." -ForegroundColor Gray
+$dbStatus = & ssh @SSH_OPTS $SSH_TARGET "docker compose -p $ProjectName ps postgres --format json 2>/dev/null | ConvertFrom-Json | Select-Object -ExpandProperty State 2>/dev/null || echo 'unknown'"
+if ($dbStatus -eq "running") {
+    Write-OK "PostgreSQL 容器运行正常"
+} else {
+    Write-Warn "PostgreSQL 状态异常: $dbStatus"
+}
+
+# 检查后端健康状态
 try {
     $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://${ServerHost}:8080/api/health" -TimeoutSec 10 -ErrorAction Stop
     if ($resp.StatusCode -eq 200) { Write-OK "后端健康检查通过" }
 } catch {
     Write-Warn "后端未响应，请检查: ssh $SSH_TARGET 'docker logs falcon-backend'"
+}
+
+# 检查 Nginx 配置是否生效
+Write-Host "  检查 Nginx 配置..." -ForegroundColor Gray
+$nginxConfig = & ssh @SSH_OPTS $SSH_TARGET "docker exec falcon-nginx cat /etc/nginx/conf.d/default.conf 2>/dev/null | grep -c 'proxy_set_header Cookie'"
+if ($nginxConfig -gt 0) {
+    Write-OK "Nginx Cookie 转发配置已生效"
+} else {
+    Write-Warn "Nginx 配置可能未更新，请重启 Nginx 容器"
 }
 
 # 清理本地临时文件
