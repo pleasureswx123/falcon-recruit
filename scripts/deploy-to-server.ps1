@@ -159,6 +159,12 @@ if ($migrateExitCode -eq 0) {
     Write-Warn "如果表结构已存在，可忽略此警告"
 }
 
+# Step 4.5: 运行数据库诊断
+Write-Host "  运行数据库诊断..." -ForegroundColor Gray
+$diagnoseCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/diagnose_db.py"
+$diagnoseOutput = & ssh @SSH_OPTS $SSH_TARGET $diagnoseCmd 2>&1
+Write-Host $diagnoseOutput -ForegroundColor DarkGray
+
 # Step 5: 构建并启动所有服务（包括后端、前端、Nginx）
 Write-Host "  构建并启动所有服务..." -ForegroundColor Gray
 $startCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
