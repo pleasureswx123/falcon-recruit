@@ -5,7 +5,8 @@ param(
     [string]$ServerHost = "192.168.10.130",
     [string]$ServerUser = "root",
     [string]$RemoteDir  = "/opt/falcon-recruit",
-    [string]$ProjectName = "falcon-recruit"
+    [string]$ProjectName = "falcon-recruit",
+    [switch]$SkipDiagnose = $false  # 跳过数据库诊断（生产部署推荐）
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,8 +105,9 @@ Write-OK ".env 上传完成"
 Write-Step "Step 3.5/5: 清理服务器旧部署..."
 
 Write-Host "  停止并移除旧容器..." -ForegroundColor Gray
+# 重要：down 命令绝对不加 -v 参数，确保 postgres-data 和 redis-data 卷不被删除
 & ssh @SSH_OPTS $SSH_TARGET "docker compose -p $ProjectName down 2>/dev/null || true"
-Write-OK "旧容器已停止"
+Write-OK "旧容器已停止（数据卷已保留）"
 
 Write-Host "  清理旧代码目录..." -ForegroundColor Gray
 & ssh @SSH_OPTS $SSH_TARGET "rm -rf ${RemoteDir} && mkdir -p ${RemoteDir}"
@@ -139,8 +141,8 @@ Write-OK "数据库容器已启动"
 Write-Host "  等待数据库就绪..." -ForegroundColor Gray
 Start-Sleep -Seconds 8
 
-# Step 4: 执行数据库迁移
-Write-Host "  执行数据库迁移（自动修复表结构）..." -ForegroundColor Gray
+# Step 4: 执行数据库迁移（幂等性：只在表结构缺失时执行）
+Write-Host "  检查并执行数据库迁移..." -ForegroundColor Gray
 $migrateCmd = @"
 cd $RemoteDir && `
 docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && `
@@ -151,19 +153,27 @@ $migrateOutput = & ssh @SSH_OPTS $SSH_TARGET $migrateCmd 2>&1
 $migrateExitCode = $LASTEXITCODE
 
 if ($migrateExitCode -eq 0) {
-    Write-OK "数据库迁移成功"
+    Write-OK "数据库迁移完成（或已迁移）"
 } else {
-    Write-Warn "数据库迁移返回码: $migrateExitCode"
-    Write-Host "迁移输出:" -ForegroundColor Gray
-    Write-Host $migrateOutput -ForegroundColor DarkGray
-    Write-Warn "如果表结构已存在，可忽略此警告"
+    # 检查是否是已存在的错误（幂等性）
+    if ($migrateOutput -match "already exists|already" ) {
+        Write-OK "数据库表结构已存在，跳过迁移"
+    } else {
+        Write-Warn "数据库迁移返回码: $migrateExitCode"
+        Write-Host "迁移输出:" -ForegroundColor Gray
+        Write-Host $migrateOutput -ForegroundColor DarkGray
+    }
 }
 
-# Step 4.5: 运行数据库诊断
-Write-Host "  运行数据库诊断..." -ForegroundColor Gray
-$diagnoseCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/diagnose_db.py"
-$diagnoseOutput = & ssh @SSH_OPTS $SSH_TARGET $diagnoseCmd 2>&1
-Write-Host $diagnoseOutput -ForegroundColor DarkGray
+# Step 4.5: 运行数据库诊断（可选）
+if (-not $SkipDiagnose) {
+    Write-Host "  运行数据库诊断..." -ForegroundColor Gray
+    $diagnoseCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/diagnose_db.py"
+    $diagnoseOutput = & ssh @SSH_OPTS $SSH_TARGET $diagnoseCmd 2>&1
+    Write-Host $diagnoseOutput -ForegroundColor DarkGray
+} else {
+    Write-Host "  跳过数据库诊断（使用 -SkipDiagnose:`$false 启用）" -ForegroundColor Gray
+}
 
 # Step 5: 构建并启动所有服务（包括后端、前端、Nginx）
 Write-Host "  构建并启动所有服务..." -ForegroundColor Gray

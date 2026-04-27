@@ -27,15 +27,25 @@ async def migrate():
     async with AsyncSessionLocal() as session:
         try:
             # 1. 添加 owner_id 列（允许 NULL，暂时不设置 NOT NULL）
-            print("\n[1/5] 添加 owner_id 列...")
-            await session.execute(text("""
-                ALTER TABLE jobs ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+            print("\n[1/6] 检查 owner_id 列...")
+            # 先检查列是否已存在
+            col_check = await session.execute(text("""
+                SELECT COUNT(*) FROM information_schema.columns 
+                WHERE table_name = 'jobs' AND column_name = 'owner_id'
             """))
-            await session.commit()
-            print("✓ owner_id 列已添加")
+            col_exists = col_check.scalar() > 0
+            
+            if col_exists:
+                print("✓ owner_id 列已存在，跳过")
+            else:
+                await session.execute(text("""
+                    ALTER TABLE jobs ADD COLUMN owner_id INTEGER;
+                """))
+                await session.commit()
+                print("✓ owner_id 列已添加")
             
             # 2. 查找或创建默认用户
-            print("\n[2/5] 查找或创建默认系统用户...")
+            print("\n[2/6] 查找或创建默认系统用户...")
             result = await session.execute(text(
                 "SELECT id, email FROM users ORDER BY id LIMIT 1"
             ))
@@ -85,7 +95,7 @@ async def migrate():
                 print(f"  ⚠️  请尽快登录并修改密码！")
             
             # 3. 为现有 job 记录设置 owner_id
-            print("\n[3/5] 为现有职位数据设置归属...")
+            print("\n[3/6] 为现有职位数据设置归属...")
             result = await session.execute(text(
                 "SELECT COUNT(*) FROM jobs WHERE owner_id IS NULL"
             ))
@@ -100,47 +110,57 @@ async def migrate():
             else:
                 print("✓ 所有职位已有 owner_id，无需更新")
             
-            # 4. 添加外键约束
-            print("\n[4/5] 添加外键约束...")
-            try:
+            # 4. 添加外键约束（如果不存在）
+            print("\n[4/6] 检查外键约束...")
+            fk_check = await session.execute(text("""
+                SELECT COUNT(*) FROM information_schema.table_constraints 
+                WHERE table_name = 'jobs' AND constraint_name = 'fk_jobs_owner'
+            """))
+            fk_exists = fk_check.scalar() > 0
+            
+            if fk_exists:
+                print("✓ 外键约束已存在，跳过")
+            else:
                 await session.execute(text("""
                     ALTER TABLE jobs ADD CONSTRAINT fk_jobs_owner 
                     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE;
                 """))
                 await session.commit()
                 print("✓ 外键约束已添加")
-            except Exception as e:
-                # PostgreSQL 中如果约束已存在会报错，这是正常的
-                if "already exists" not in str(e).lower():
-                    raise
-                print("✓ 外键约束已存在，跳过")
             
-            # 5. 设置 owner_id 为 NOT NULL
-            print("\n[5/5] 设置 owner_id 为 NOT NULL...")
-            try:
+            # 5. 设置 owner_id 为 NOT NULL（如果尚未设置）
+            print("\n[5/6] 检查 owner_id NOT NULL 约束...")
+            nullable_check = await session.execute(text("""
+                SELECT is_nullable FROM information_schema.columns 
+                WHERE table_name = 'jobs' AND column_name = 'owner_id'
+            """))
+            is_nullable = nullable_check.scalar()
+            
+            if is_nullable == 'NO':
+                print("✓ owner_id 已经是 NOT NULL，跳过")
+            else:
                 await session.execute(text("""
                     ALTER TABLE jobs ALTER COLUMN owner_id SET NOT NULL;
                 """))
                 await session.commit()
                 print("✓ owner_id 已设置为 NOT NULL")
-            except Exception as e:
-                # 如果已经设置了 NOT NULL，跳过
-                if "not null" not in str(e).lower() or "already" in str(e).lower():
-                    raise
-                print("✓ owner_id 已经是 NOT NULL，跳过")
             
-            # 6. 创建索引
-            print("\n[6/6] 创建索引...")
-            try:
+            # 6. 创建索引（如果不存在）
+            print("\n[6/6] 检查索引...")
+            idx_check = await session.execute(text("""
+                SELECT COUNT(*) FROM pg_indexes 
+                WHERE tablename = 'jobs' AND indexname = 'ix_jobs_owner_id'
+            """))
+            idx_exists = idx_check.scalar() > 0
+            
+            if idx_exists:
+                print("✓ 索引已存在，跳过")
+            else:
                 await session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS ix_jobs_owner_id ON jobs(owner_id);
+                    CREATE INDEX ix_jobs_owner_id ON jobs(owner_id);
                 """))
                 await session.commit()
                 print("✓ 索引已创建")
-            except Exception as e:
-                if "already exists" not in str(e).lower():
-                    raise
-                print("✓ 索引已存在，跳过")
             
             print("\n" + "=" * 60)
             print("✓ 迁移完成！")
