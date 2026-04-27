@@ -60,7 +60,7 @@ if (-not (Test-Path $envFile)) {
 Write-OK ".env 存在"
 
 # -------------------------------------------------------
-# Step 3: 打包源码并上传到服务器
+# Step 3: 打包源码并上传到服务器 + 清理旧部署
 # -------------------------------------------------------
 Write-Step "Step 3/5: 打包源码..."
 
@@ -99,21 +99,31 @@ if ($LASTEXITCODE -ne 0) { Write-Fail ".env 文件上传失败" }
 Write-OK ".env 上传完成"
 
 # -------------------------------------------------------
+# Step 3.5: 清理服务器旧部署（确保环境干净）
+# -------------------------------------------------------
+Write-Step "Step 3.5/5: 清理服务器旧部署..."
+
+Write-Host "  停止并移除旧容器..." -ForegroundColor Gray
+& ssh @SSH_OPTS $SSH_TARGET "docker compose -p $ProjectName down 2>/dev/null || true"
+Write-OK "旧容器已停止"
+
+Write-Host "  清理旧代码目录..." -ForegroundColor Gray
+& ssh @SSH_OPTS $SSH_TARGET "rm -rf ${RemoteDir} && mkdir -p ${RemoteDir}"
+Write-OK "旧代码已清理"
+
+# -------------------------------------------------------
 # Step 4: 服务器端 - 解压 + 构建 + 启动
 # -------------------------------------------------------
 Write-Step "Step 4/5: 在服务器上解压并启动服务..."
 
-# 使用预创建的远程部署脚本（确保 Unix 换行符）
-$remoteScriptLocal = Join-Path $PSScriptRoot "falcon_remote_deploy.sh"
+Write-Host "  在服务器上执行部署命令..." -ForegroundColor Gray
 
-if (-not (Test-Path $remoteScriptLocal)) {
-    Write-Fail "找不到远程部署脚本: $remoteScriptLocal"
-}
+# 直接在 SSH 会话中执行部署命令（使用单行避免换行符问题）
+# 注意：tar 解压后会创建 falcon-recruit 子目录，需要进入该目录
+# 重要：必须同时使用 docker-compose.yml 和 docker-compose.prod.yml
+$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && cd falcon-recruit && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
 
-& scp @SSH_OPTS $remoteScriptLocal "${SSH_TARGET}:/tmp/falcon_remote_deploy.sh"
-if ($LASTEXITCODE -ne 0) { Write-Fail "脚本上传失败" }
-
-& ssh @SSH_OPTS $SSH_TARGET "chmod +x /tmp/falcon_remote_deploy.sh; bash /tmp/falcon_remote_deploy.sh; rm /tmp/falcon_remote_deploy.sh"
+& ssh @SSH_OPTS $SSH_TARGET $deployCommands
 if ($LASTEXITCODE -ne 0) { Write-Fail "服务器端部署失败，请检查日志" }
 
 Write-OK "服务器端部署完成"
@@ -133,7 +143,6 @@ try {
 
 # 清理本地临时文件
 Remove-Item $zipFile -Force -ErrorAction SilentlyContinue
-Remove-Item $remoteScriptLocal -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "=================================================" -ForegroundColor Green

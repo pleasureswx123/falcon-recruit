@@ -19,10 +19,10 @@ export function Sidebar() {
         </div>
       </div>
       <Separator />
-      <div className="flex h-14 shrink-0 items-center px-4">
+      {/* <div className="flex h-14 shrink-0 items-center px-4">
         <Logo />
       </div>
-      <Separator />
+      <Separator /> */}
       <ScrollArea className="flex-1">
         <SidebarNav />
       </ScrollArea>
