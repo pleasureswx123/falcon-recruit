@@ -18,7 +18,7 @@ export interface ApiError {
 function createClient(): AxiosInstance {
   const instance = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 15_000,
+    timeout: 60_000, // 60秒，与后端 LLM 超时时间保持一致
     headers: {
       "Content-Type": "application/json",
     },
