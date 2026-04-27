@@ -45,7 +45,9 @@ export default function LoginPage() {
       toast.success('登录成功')
       router.push('/jobs')
     } catch (error) {
-      const message = error instanceof Error ? error.message : '登录失败，请检查邮箱和密码'
+      // ApiError 对象包含 message 字段，优先使用
+      const apiError = error as { message?: string }
+      const message = apiError?.message || '登录失败，请检查邮箱和密码'
       toast.error(message)
     } finally {
       setIsLoading(false)

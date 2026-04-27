@@ -35,13 +35,19 @@ function createClient(): AxiosInstance {
         (data && typeof data.request_id === "string" ? data.request_id : undefined) ??
         (error.response?.headers?.["x-request-id"] as string | undefined)
 
-      // 401：清除本地用户状态并重定向到登录页
+      // 401：清除本地用户状态并重定向到登录页（排除登录/注册页面）
       if (status === 401 && typeof window !== "undefined") {
-        // 动态导入避免循环依赖
-        import("@/lib/store/auth").then(({ useAuthStore }) => {
-          useAuthStore.getState().logout()
-          window.location.href = "/login"
-        })
+        const currentPath = window.location.pathname
+        const isAuthPage = currentPath === "/login" || currentPath === "/register"
+        
+        // 只有在非认证页面遇到 401 时才执行登出和重定向
+        if (!isAuthPage) {
+          // 动态导入避免循环依赖
+          import("@/lib/store/auth").then(({ useAuthStore }) => {
+            useAuthStore.getState().logout()
+            window.location.href = "/login"
+          })
+        }
       }
 
       const message =
