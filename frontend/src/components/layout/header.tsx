@@ -30,7 +30,7 @@ function resolveTitle(pathname: string): string {
   const prefix = Object.keys(titleMap)
     .filter((k) => k !== "/" && pathname.startsWith(k))
     .sort((a, b) => b.length - a.length)[0]
-  return prefix ? titleMap[prefix] : "页面"
+  return prefix ? titleMap[prefix] : "登录/注册-页面"
 }
 
 export function Header() {
