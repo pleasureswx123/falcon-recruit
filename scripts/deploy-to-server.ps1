@@ -119,31 +119,48 @@ Write-Step "Step 4/5: 在服务器上解压并启动服务..."
 Write-Host "  在服务器上执行部署命令..." -ForegroundColor Gray
 
 # 重要：必须同时使用 docker-compose.yml 和 docker-compose.prod.yml
-# --build 强制重新构建所有镜像（包括 nginx），确保 Cookie 转发配置生效
-# 1. 先启动数据库容器
-$deployCommands = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && mv /tmp/falcon_recruit.env .env && docker compose -p $ProjectName -f docker-compose.yml up -d postgres redis"
+# 部署顺序：解压代码 → 启动数据库 → 执行迁移 → 构建并启动所有服务
 
+# Step 1: 解压代码
+Write-Host "  解压代码..." -ForegroundColor Gray
+$extractCmd = "cd $RemoteDir && tar -xzf /tmp/falcon_recruit_deploy.tar.gz && mv /tmp/falcon_recruit.env .env"
+& ssh @SSH_OPTS $SSH_TARGET $extractCmd
+if ($LASTEXITCODE -ne 0) { Write-Fail "代码解压失败" }
+Write-OK "代码已解压"
+
+# Step 2: 启动数据库容器
 Write-Host "  启动数据库容器..." -ForegroundColor Gray
-& ssh @SSH_OPTS $SSH_TARGET $deployCommands
+$dbCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml up -d postgres redis"
+& ssh @SSH_OPTS $SSH_TARGET $dbCmd
 if ($LASTEXITCODE -ne 0) { Write-Fail "数据库容器启动失败" }
 Write-OK "数据库容器已启动"
 
-# 2. 等待数据库就绪
+# Step 3: 等待数据库就绪
 Write-Host "  等待数据库就绪..." -ForegroundColor Gray
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 8
 
-# 3. 执行数据库迁移（自动添加缺失的字段）
-Write-Host "  执行数据库迁移（确保表结构同步）..." -ForegroundColor Gray
-$migrateCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && docker compose -p $ProjectName -f docker-compose.prod.yml run --rm backend python scripts/migrate_add_owner_id.py"
-& ssh @SSH_OPTS $SSH_TARGET $migrateCmd
-if ($LASTEXITCODE -ne 0) { 
-    Write-Warn "数据库迁移失败或已执行过（可忽略）"
+# Step 4: 执行数据库迁移
+Write-Host "  执行数据库迁移（自动修复表结构）..." -ForegroundColor Gray
+$migrateCmd = @"
+cd $RemoteDir && `
+docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && `
+docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/migrate_add_owner_id.py
+"@
+
+$migrateOutput = & ssh @SSH_OPTS $SSH_TARGET $migrateCmd 2>&1
+$migrateExitCode = $LASTEXITCODE
+
+if ($migrateExitCode -eq 0) {
+    Write-OK "数据库迁移成功"
 } else {
-    Write-OK "数据库迁移完成"
+    Write-Warn "数据库迁移返回码: $migrateExitCode"
+    Write-Host "迁移输出:" -ForegroundColor Gray
+    Write-Host $migrateOutput -ForegroundColor DarkGray
+    Write-Warn "如果表结构已存在，可忽略此警告"
 }
 
-# 4. 启动所有服务
-Write-Host "  启动所有服务..." -ForegroundColor Gray
+# Step 5: 构建并启动所有服务（包括后端、前端、Nginx）
+Write-Host "  构建并启动所有服务..." -ForegroundColor Gray
 $startCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
 & ssh @SSH_OPTS $SSH_TARGET $startCmd
 if ($LASTEXITCODE -ne 0) { Write-Fail "服务启动失败，请检查日志" }
