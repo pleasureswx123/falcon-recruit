@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
+import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { JobCriteriaSummary } from "@/components/jobs/job-criteria-summary"
 import { Button } from "@/components/ui/button"
 import {
@@ -58,11 +59,15 @@ export function JobFormSheet({
   // AI 写 JD 区域状态
   const [genOpen, setGenOpen] = React.useState(false)
   const [genHint, setGenHint] = React.useState("")
+  // 确认关闭对话框状态
+  const [showConfirmClose, setShowConfirmClose] = React.useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { title: "", raw_jd: "" },
   })
+
+  const isDirty = form.formState.isDirty
 
   React.useEffect(() => {
     if (open) {
@@ -142,8 +147,26 @@ export function JobFormSheet({
     }
   }
 
+  function handleOpenChange(open: boolean) {
+    if (!open && isDirty && !submitting) {
+      // 尝试关闭但有未保存的更改，显示确认对话框
+      setShowConfirmClose(true)
+    } else {
+      onOpenChange(open)
+    }
+  }
+
+  function handleConfirmClose() {
+    setShowConfirmClose(false)
+    onOpenChange(false)
+  }
+
+  function handleCancelClose() {
+    setShowConfirmClose(false)
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
         className="w-full overflow-y-auto sm:max-w-[640px]"
@@ -279,7 +302,7 @@ export function JobFormSheet({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => onOpenChange(false)}
+                onClick={() => handleOpenChange(false)}
                 disabled={submitting}
               >
                 取消
@@ -294,6 +317,19 @@ export function JobFormSheet({
           </form>
         </Form>
       </SheetContent>
+
+      <ConfirmDialog
+        open={showConfirmClose}
+        onOpenChange={(open) => {
+          if (!open) handleCancelClose()
+        }}
+        title="确认放弃更改？"
+        description="您有未保存的更改，关闭后将丢失这些信息。"
+        confirmText="放弃更改"
+        cancelText="继续编辑"
+        destructive
+        onConfirm={handleConfirmClose}
+      />
     </Sheet>
   )
 }
