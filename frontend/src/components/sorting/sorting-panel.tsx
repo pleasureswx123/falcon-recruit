@@ -5,6 +5,16 @@ import Link from "next/link"
 import { ArrowRight, FileArchive } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { SortingTaskCard } from "@/components/sorting/sorting-task-card"
 import { TaskStatusBadge } from "@/components/sorting/task-status-badge"
 import { ZipDropzone } from "@/components/sorting/zip-dropzone"
@@ -25,6 +35,8 @@ interface Props {
 export function SortingPanel({ jobId }: Props) {
   const [activeTaskId, setActiveTaskId] = React.useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = React.useState(0)
+  const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false)
+  const [pendingNavigation, setPendingNavigation] = React.useState<string | null>(null)
 
   const uploadMutation = useUploadZip()
   const { data: activeTask } = useTask(activeTaskId ?? undefined)
@@ -51,6 +63,18 @@ export function SortingPanel({ jobId }: Props) {
     }
   }
 
+  // 页面离开保护：浏览器原生提示
+  React.useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (uploadMutation.isPending) {
+        e.preventDefault()
+        e.returnValue = '文件上传中，确定要离开吗？'
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [uploadMutation.isPending])
+
   const latestOtherTasks =
     taskList?.items.filter((t) => t.id !== activeTaskId) ?? []
 
@@ -61,7 +85,19 @@ export function SortingPanel({ jobId }: Props) {
           <FileArchive className="h-4 w-4 text-muted-foreground" />
           简历分拣
         </CardTitle>
-        <Button variant="ghost" size="sm" asChild>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          asChild
+          onClick={(e) => {
+            // 如果正在上传，阻止默认导航，显示确认对话框
+            if (uploadMutation.isPending) {
+              e.preventDefault()
+              setPendingNavigation(`/workbench?jobId=${jobId}`)
+              setShowLeaveConfirm(true)
+            }
+          }}
+        >
           <Link href={`/workbench?jobId=${jobId}`}>
             进入工作台
             <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -120,6 +156,30 @@ export function SortingPanel({ jobId }: Props) {
             </div>
           )}
         </div>
+
+        {/* 离开确认对话框 */}
+        <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>文件上传中</AlertDialogTitle>
+              <AlertDialogDescription>
+                当前有文件正在上传，离开页面将中断上传过程。确定要继续吗？
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>继续上传</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (pendingNavigation) {
+                    window.location.href = pendingNavigation
+                  }
+                }}
+              >
+                确认离开
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )
