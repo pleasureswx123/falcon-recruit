@@ -42,6 +42,12 @@ falcon-recruit/
 
 ## 🚀 快速开始
 
+> ⚡ **日常迭代只需记这一条命令**（本地 Windows → 远程服务器 `192.168.10.130:8080`）：
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File scripts\deploy-to-server.ps1
+> ```
+> 详见下方 [模式 C · 一键远程部署](#模式-c--一键远程部署日常迭代推荐-)。
+
 ### 先决条件
 - Docker Desktop ≥ 24
 - Node.js ≥ 20 + npm（仅本地开发模式需要）
@@ -102,6 +108,79 @@ bash scripts/verify_nginx.sh
 
 # Windows PowerShell
 .\scripts\verify_nginx.ps1
+```
+
+---
+
+### 模式 C · 一键远程部署（日常迭代推荐 ⭐）
+
+> 适用场景：**本地 Windows 11 开发机 → 远程 Linux 服务器** `192.168.10.130:8080`
+> 这是日常代码改完后**唯一需要记住的一条命令**，所有同步、构建、迁移、重启全自动完成。
+
+#### Windows 11（PowerShell）—— 唯一入口
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-to-server.ps1
+```
+
+#### macOS / Linux 客户端（等价命令）
+
+```bash
+bash scripts/deploy-to-server.sh
+```
+
+#### 脚本自动完成的事
+
+1. 检查本地工具（`ssh` / `scp` / `tar`）
+2. 校验本地 `.env` 是否存在（不存在自动复制 `.env.example` 并退出提醒）
+3. 打包源码（排除 `node_modules` / `.next` / `__pycache__` / `.env` / `.git` 等）
+4. SCP 上传源码包 + 单独上传 `.env` 到 `/opt/falcon-recruit`
+5. SSH 到服务器：停止旧容器（**保留 postgres-data / redis-data 数据卷**）、清理旧代码
+6. 启动 `postgres` + `redis`，等待数据库就绪
+7. 执行数据库迁移脚本（**幂等**，已存在的表会自动跳过）
+8. `docker compose ... up -d --build` 构建并启动 `backend` / `frontend` / `nginx`
+9. 健康检查 `http://192.168.10.130:8080/api/health`
+
+#### 部署后访问入口
+
+| 用途 | URL |
+| :-- | :-- |
+| 前端页面 | http://192.168.10.130:8080/ |
+| 后端 API | http://192.168.10.130:8080/api/ |
+| 健康检查 | http://192.168.10.130:8080/api/health |
+| API 文档 | http://192.168.10.130:8080/api/docs |
+
+#### 服务器侧常用运维命令
+
+```bash
+# 容器状态
+ssh root@192.168.10.130 "docker ps --filter name=falcon"
+
+# 实时日志
+ssh root@192.168.10.130 "docker logs -f falcon-backend"
+ssh root@192.168.10.130 "docker logs -f falcon-frontend"
+ssh root@192.168.10.130 "docker logs -f falcon-nginx"
+
+# 重启单个服务
+ssh root@192.168.10.130 "cd /opt/falcon-recruit && docker compose -p falcon-recruit restart backend"
+
+# 停止全部（保留数据卷）
+ssh root@192.168.10.130 "cd /opt/falcon-recruit && docker compose -p falcon-recruit down"
+```
+
+#### 常见误报识别
+
+- 终端里看到红色 `ssh.exe : Container falcon-xxx Running` / `NativeCommandError`：**不是真错误**，是 `docker compose` 把状态信息写到 stderr，PowerShell 显示成红色。脚本会继续执行。
+- 若脚本卡在「检查并执行数据库迁移...」几分钟：正常，首次部署 backend 镜像在构建（pip install）。
+- 若卡在「构建并启动所有服务...」5–10 分钟：正常，frontend 在跑 `next build`。
+
+#### 修改默认目标服务器
+
+脚本默认部署到 `root@192.168.10.130:/opt/falcon-recruit`，要换目标改参数即可：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-to-server.ps1 `
+    -ServerHost 10.0.0.50 -ServerUser deploy -RemoteDir /srv/falcon-recruit
 ```
 
 ---

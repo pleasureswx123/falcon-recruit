@@ -142,15 +142,17 @@ Write-Host "  等待数据库就绪..." -ForegroundColor Gray
 Start-Sleep -Seconds 8
 
 # Step 4: 执行数据库迁移（幂等性：只在表结构缺失时执行）
+# 注意：必须使用单行命令，避免 PowerShell here-string 的 CRLF 导致远程 bash 报 $'\r' 错误
 Write-Host "  检查并执行数据库迁移..." -ForegroundColor Gray
-$migrateCmd = @"
-cd $RemoteDir && `
-docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && `
-docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/migrate_add_owner_id.py
-"@
+$migrateCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml exec -T postgres pg_isready -U falcon -d falcon && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/migrate_add_owner_id.py"
 
-$migrateOutput = & ssh @SSH_OPTS $SSH_TARGET $migrateCmd 2>&1
+# 用 Out-String 把 stderr 转成普通字符串，避免 PowerShell 把 docker compose 的
+# 状态信息（如 "Container falcon-redis Running"）包装成红色 NativeCommandError 误导用户
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$migrateOutput = (& ssh @SSH_OPTS $SSH_TARGET $migrateCmd 2>&1 | Out-String).Trim()
 $migrateExitCode = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
 
 if ($migrateExitCode -eq 0) {
     Write-OK "数据库迁移完成（或已迁移）"
@@ -169,7 +171,10 @@ if ($migrateExitCode -eq 0) {
 if (-not $SkipDiagnose) {
     Write-Host "  运行数据库诊断..." -ForegroundColor Gray
     $diagnoseCmd = "cd $RemoteDir && docker compose -p $ProjectName -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python scripts/diagnose_db.py"
-    $diagnoseOutput = & ssh @SSH_OPTS $SSH_TARGET $diagnoseCmd 2>&1
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $diagnoseOutput = (& ssh @SSH_OPTS $SSH_TARGET $diagnoseCmd 2>&1 | Out-String).Trim()
+    $ErrorActionPreference = $prevEAP
     Write-Host $diagnoseOutput -ForegroundColor DarkGray
 } else {
     Write-Host "  跳过数据库诊断（使用 -SkipDiagnose:`$false 启用）" -ForegroundColor Gray
