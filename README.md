@@ -40,6 +40,272 @@ falcon-recruit/
 
 ---
 
+## 🧭 架构心智模型
+
+本节用一组从宏观到微观、从静态到动态的 Mermaid 图串起系统：先看 C4 前三层，再看数据如何流动、关键业务如何交互、核心实体如何变迁。
+
+### C4 第 1 层 · 系统上下文图
+
+```mermaid
+flowchart LR
+    HR["HR / 招聘负责人"]
+    Admin["运维 / 管理员"]
+    Falcon["Falcon AI 智能招聘管理系统"]
+    LLM["OpenAI 兼容 LLM 服务<br/>火山方舟 / OpenAI / 其他兼容厂商"]
+    Download["浏览器下载与预览能力<br/>ZIP / CSV / 文件预览"]
+
+    HR -->|"注册登录、维护职位、上传 ZIP、查看候选人报告"| Falcon
+    Admin -->|"部署、配置环境变量、查看日志和健康检查"| Falcon
+    Falcon -->|"JD 生成、JD 解析、简历画像、语义评分、面试题生成"| LLM
+    Falcon -->|"返回候选人列表、报告、重命名附件、导出包"| Download
+```
+
+### C4 第 2 层 · 容器图
+
+```mermaid
+flowchart TB
+    subgraph Client["用户侧"]
+        Browser["浏览器<br/>Next.js 页面运行环境"]
+    end
+
+    subgraph Runtime["Falcon 部署单元"]
+        Nginx["Nginx<br/>统一入口 / 反向代理"]
+        Frontend["frontend 容器<br/>Next.js 14 / App Router / TanStack Query"]
+        Backend["backend 容器<br/>FastAPI / SQLModel / 后台异步任务"]
+        Storage["backend-storage<br/>ZIP 解压原件 / 重命名附件"]
+        Postgres["PostgreSQL 16<br/>用户、职位、任务、候选人、文件"]
+        Redis["Redis 7<br/>Session 存储 / 认证态"]
+    end
+
+    LLM["外部 LLM<br/>OpenAI 兼容 Chat Completions"]
+
+    Browser -->|"HTTP /"| Nginx
+    Browser -->|"HTTP /api/* 携带 HttpOnly Cookie"| Nginx
+    Nginx -->|"代理 /"| Frontend
+    Nginx -->|"代理 /api/"| Backend
+    Frontend -->|"Axios /api"| Backend
+    Backend -->|"asyncpg"| Postgres
+    Backend -->|"redis.asyncio"| Redis
+    Backend -->|"读写文件"| Storage
+    Backend -->|"JSON Prompt / Response"| LLM
+```
+
+### C4 第 3 层 · 后端组件图
+
+```mermaid
+flowchart TB
+    Router["app.api.router<br/>统一挂载 /api 路由"]
+    AuthAPI["auth endpoints<br/>注册 / 登录 / 登出 / me"]
+    JobsAPI["jobs endpoints<br/>职位 CRUD / JD 生成与解析"]
+    TasksAPI["tasks endpoints<br/>ZIP 上传 / 任务进度 / 未匹配文件"]
+    CandidatesAPI["candidates endpoints<br/>候选人列表 / 详情 / 报告 / 纠偏"]
+    FilesAPI["files endpoints<br/>下载 / 预览"]
+    ExportAPI["export endpoints<br/>ZIP / CSV 导出"]
+    DashboardAPI["dashboard endpoints<br/>概览统计"]
+
+    AuthCore["core.auth<br/>bcrypt / Redis Session / Cookie 鉴权"]
+    DB["core.database<br/>AsyncSession / SQLModel metadata"]
+    RateLimit["core.rate_limit<br/>上传与导出限流"]
+
+    UserSvc["user_service"]
+    JobSvc["job_service + jd_parser"]
+    ZipSvc["zip_processor<br/>解压、解析、PII 关联、重命名、触发评分"]
+    CandidateSvc["candidate_service<br/>查询、纠偏、文件改挂"]
+    ProfileSvc["profile_pipeline<br/>画像、核验、评分、面试建议"]
+    ExportSvc["export_service<br/>生成 CSV / ZIP"]
+    ParserSvc["file_parser / pii_extractor / pii_linker"]
+    LlmClient["services.llm.client<br/>OpenAI 兼容 JSON 调用 + 降级"]
+
+    Models["SQLModel 实体<br/>User / Job / SortingTask / Candidate / ResumeFile"]
+    PG["PostgreSQL"]
+    RS["Redis"]
+    FS["Storage"]
+    LLM["外部 LLM"]
+
+    Router --> AuthAPI
+    Router --> JobsAPI
+    Router --> TasksAPI
+    Router --> CandidatesAPI
+    Router --> FilesAPI
+    Router --> ExportAPI
+    Router --> DashboardAPI
+
+    AuthAPI --> AuthCore --> RS
+    AuthAPI --> UserSvc
+    JobsAPI --> JobSvc --> LlmClient
+    TasksAPI --> RateLimit
+    TasksAPI --> ZipSvc
+    CandidatesAPI --> CandidateSvc
+    CandidatesAPI --> ProfileSvc
+    FilesAPI --> CandidateSvc
+    ExportAPI --> ExportSvc
+
+    ZipSvc --> ParserSvc
+    ZipSvc --> ProfileSvc
+    ZipSvc --> FS
+    ProfileSvc --> ParserSvc
+    ProfileSvc --> LlmClient
+    LlmClient --> LLM
+
+    UserSvc --> DB
+    JobSvc --> DB
+    ZipSvc --> DB
+    CandidateSvc --> DB
+    ProfileSvc --> DB
+    ExportSvc --> DB
+    DB --> Models --> PG
+```
+
+### 数据流图
+
+```mermaid
+flowchart LR
+    JD["职位 JD / 职位标题"] --> Criteria["结构化 Criteria<br/>学历、年限、技能、地点、薪资"]
+    Zip["候选人 ZIP"] --> Validate["上传校验<br/>大小、后缀、ZIP 炸弹防御"]
+    Validate --> Task["SortingTask<br/>pending → extracting → parsing → linking"]
+    Task --> Extract["解压到 raw storage"]
+    Extract --> Parse["file_parser<br/>PDF / DOCX / TXT / 图片等解析"]
+    Parse --> PII["pii_extractor<br/>姓名 / 电话 / 邮箱 / 微信"]
+    PII --> Link["pii_linker<br/>按 PII 和目录线索聚合"]
+    Link --> Candidate["Candidate<br/>一人一岗"]
+    Link --> File["ResumeFile<br/>原名、路径、类型、解析状态、候选人归属"]
+    File --> Rename["物理复制并重命名<br/>storage/jobs/{job_id}/renamed"]
+    Candidate --> Report["Candidate.report<br/>画像、核验、五维评分、面试题"]
+    Criteria --> Report
+    Report --> Dashboard["Dashboard / 候选人列表 / 详情页"]
+    Report --> Export["CSV 导出"]
+    File --> Preview["文件预览 / 下载"]
+    Rename --> ExportZip["重命名附件 ZIP 导出"]
+```
+
+### 关键业务节点时序图 · 上传 ZIP 到候选人报告
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor HR as HR
+    participant UI as Next.js 前端
+    participant API as FastAPI /api/tasks
+    participant DB as PostgreSQL
+    participant BG as zip_processor 后台协程
+    participant FS as Storage
+    participant LLM as LLM 服务
+
+    HR->>UI: 选择职位并上传 ZIP
+    UI->>API: POST /api/tasks/upload(job_id, file)
+    API->>DB: 校验 Job 归属，创建 SortingTask(pending)
+    API-->>UI: 202 Accepted + task_id
+    API->>BG: asyncio.create_task(run_pipeline)
+
+    loop 前端轮询任务状态
+        UI->>API: GET /api/tasks/{task_id}
+        API->>DB: 读取 SortingTask
+        API-->>UI: status / progress / stage_message
+    end
+
+    BG->>DB: 标记 extracting
+    BG->>FS: 解压 ZIP 到 raw 目录
+    BG->>DB: 标记 parsing，写入 ResumeFile
+    BG->>BG: 文本解析 + PII 提取
+    BG->>DB: 标记 linking
+    BG->>BG: PII Linker 聚合候选人
+    BG->>DB: 创建 Candidate，回填 ResumeFile.candidate_id
+    BG->>FS: 复制到 renamed 目录并生成 new_name
+    loop 每位候选人
+        BG->>LLM: 简历画像 / 语义评分 / 面试问题
+        LLM-->>BG: JSON 结果或失败
+        BG->>BG: 失败时规则式/模板降级
+        BG->>DB: 写入 Candidate.score / Candidate.report
+    end
+    BG->>DB: 标记 SortingTask(succeeded, progress=100)
+    UI->>API: GET /api/candidates?job_id=...
+    API-->>UI: 候选人列表与评分
+```
+
+### 关键业务节点时序图 · 登录与受保护 API
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 用户
+    participant UI as Next.js 前端
+    participant Auth as /api/auth
+    participant Redis as Redis
+    participant DB as PostgreSQL
+    participant Biz as 业务 API
+
+    User->>UI: 输入邮箱和密码
+    UI->>Auth: POST /api/auth/login
+    Auth->>DB: 查询用户并校验 bcrypt 密码
+    Auth->>Redis: 写入 session:{session_id}，TTL 24h
+    Auth-->>UI: Set-Cookie: session_id; HttpOnly; SameSite=Lax
+    UI->>Biz: 请求 /api/jobs / /api/tasks / /api/candidates
+    Biz->>Redis: 通过 Cookie session_id 读取 user_id
+    Biz->>DB: 查询 User 并校验 is_active
+    Biz->>DB: 按 owner_id 过滤业务数据
+    Biz-->>UI: 返回当前用户可访问的数据
+```
+
+### 核心实体状态图
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: 创建 SortingTask
+    Pending --> Extracting: 后台协程开始处理
+    Extracting --> Parsing: ZIP 解压完成
+    Parsing --> Linking: 文件解析与 PII 提取完成
+    Linking --> Succeeded: 候选人/文件落库并完成报告
+
+    Pending --> Failed: 职位不存在 / 服务重启兜底
+    Extracting --> Failed: ZIP 损坏 / 解压失败
+    Parsing --> Failed: 流水线未捕获异常
+    Linking --> Failed: 关联或落库失败
+
+    Succeeded --> [*]
+    Failed --> [*]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> JobActive: 创建职位
+    JobActive --> JobActive: 更新 JD / criteria
+    JobActive --> JobClosed: 关闭职位
+    JobClosed --> JobActive: 重新打开
+    JobActive --> Deleted: 删除职位
+    JobClosed --> Deleted: 删除职位
+    Deleted --> [*]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> FilePending: 创建 ResumeFile
+    FilePending --> FileParsed: 文本解析成功
+    FilePending --> FileFailed: 解析失败
+    FilePending --> FileUnsupported: 不支持的格式
+
+    FileParsed --> Unlinked: 未提取到可用 PII
+    FileParsed --> Linked: PII / 目录线索关联到 Candidate
+    FileFailed --> Unlinked
+    FileUnsupported --> Unlinked
+
+    Unlinked --> Linked: 人工改挂文件
+    Linked --> Verified: 候选人信息人工核验
+    Verified --> Linked: 取消核验或继续纠偏
+```
+
+### 模块职责速览
+
+| 层级 | 主要模块 | 职责 |
+| :-- | :-- | :-- |
+| Web UI | `frontend/src/app`、`frontend/src/components` | 登录注册、职位管理、ZIP 上传、分拣工作台、报告查看、导出入口 |
+| 前端数据层 | `frontend/src/lib/api`、`frontend/src/lib/hooks`、`frontend/src/lib/store` | Axios API 封装、TanStack Query 数据获取、Zustand 认证态 |
+| API 层 | `backend/app/api/endpoints` | HTTP 入参校验、鉴权依赖、限流、状态码与响应模型 |
+| 核心能力层 | `backend/app/services` | JD 解析、ZIP 分拣、文件解析、PII 关联、候选人报告、导出 |
+| 基础设施层 | `backend/app/core` | 配置、数据库会话、Redis Session、异常处理、日志、限流 |
+| 数据层 | `backend/app/models` | `User`、`Job`、`SortingTask`、`Candidate`、`ResumeFile` 五类核心表 |
+
+---
+
 ## 🚀 快速开始
 
 > ⚡ **日常迭代只需记这一条命令**（本地 Windows → 远程服务器 `192.168.10.130:8080`）：
