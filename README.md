@@ -42,7 +42,7 @@ falcon-recruit/
 
 ## 🧭 架构心智模型
 
-本节用一组从宏观到微观、从静态到动态的 Mermaid 图串起系统：先看 C4 前三层，再看数据如何流动、关键业务如何交互、核心实体如何变迁。
+本节用一组从宏观到微观、从静态到动态的 Mermaid 图串起系统：先看 C4 前三层，再看数据与大模型能力如何流动、关键业务如何交互、核心实体如何变迁。
 
 ### C4 第 1 层 · 系统上下文图
 
@@ -176,6 +176,135 @@ flowchart LR
     Report --> Export["CSV 导出"]
     File --> Preview["文件预览 / 下载"]
     Rename --> ExportZip["重命名附件 ZIP 导出"]
+```
+
+### 大模型使用总览
+
+系统没有把不同环节硬编码到不同模型，而是通过一个 OpenAI 兼容客户端统一调用：
+
+| 配置 / 模型 | 来源 | 作用范围 | 说明 |
+| :-- | :-- | :-- | :-- |
+| `LLM_MODEL=doubao-1-5-pro-32k-250115` | `.env.example`、`docker-compose.prod.yml` | 生产默认大模型 | 默认走火山方舟 Doubao 1.5 Pro，使用 OpenAI 兼容 `/chat/completions` 协议 |
+| `LLM_MODEL=gpt-4o` | `backend/app/core/config.py` 代码默认值 | 本地代码默认值 | 如果未通过环境变量覆盖但配置了 `OPENAI_API_KEY`，客户端会使用该模型名 |
+| 任意 OpenAI 兼容模型 | `OPENAI_BASE_URL` + `OPENAI_API_KEY` + `LLM_MODEL` | 全部 LLM 能力点 | 可替换为 OpenAI、火山方舟或其他兼容厂商；接口统一由 `services.llm.client.chat_json()` 封装 |
+
+| 业务节点 | 代码入口 | 大模型参与环节 | 输入 | 输出 | 降级策略 |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| AI 写 JD | `POST /api/jobs/generate-jd` → `generate_jd_async` | 根据职位名称和简述生成完整 JD 文本 | `title`、`description` | `jd_text` | 未配置或调用失败时返回 503，提示配置 LLM |
+| JD 解析 | `POST /api/jobs/parse-jd`、创建职位 → `parse_jd_to_criteria_async` | 将自然语言 JD 解析为结构化匹配基准 | `raw_jd`、可选职位标题 | `JobCriteria`：学历、年限、技能、行业、薪资、地点 | 规则关键词解析 `parse_jd_to_criteria` |
+| 简历画像 | ZIP 分拣后 / 报告刷新 → `parse_resume_async` | 将简历全文抽取为结构化候选人画像 | 简历文本、候选人姓名兜底值 | `ResumeProfile`：经历、教育、技能、期望、摘要 | 正则与分节解析 `parse_resume` |
+| 五维评分 | `profile_pipeline.compute_report` → `score_candidate_async` | 基于岗位基准、画像、履历核验生成五维评分理由 | `JobCriteria`、`ResumeProfile`、`VerificationReport` | 五维 `DimensionScore`、总分、优势劣势 | 规则评分 `score_candidate` |
+| 面试提纲 | `profile_pipeline.compute_report` → `generate_questions_async` | 根据低分维度和弱项生成 3 条问题与考察意图 | 弱项维度、弱项描述、职位标题 | `InterviewQuestion[]`，含 `intent` | 模板题库 `generate_questions` |
+
+### 大模型能力流图
+
+```mermaid
+flowchart TB
+    Config["环境配置<br/>OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL"]
+    Client["services.llm.client<br/>chat_json()"]
+    Model["OpenAI 兼容大模型<br/>默认生产: doubao-1-5-pro-32k-250115"]
+
+    JDGen["AI 写 JD<br/>generate_jd_async"]
+    JDParse["JD 解析<br/>parse_jd_to_criteria_async"]
+    ResumeParse["简历画像<br/>parse_resume_async"]
+    Scoring["五维评分<br/>score_candidate_async"]
+    Interview["面试提纲<br/>generate_questions_async"]
+
+    Criteria["Job.criteria"]
+    Profile["ResumeProfile"]
+    Report["Candidate.report"]
+
+    Config --> Client --> Model
+    JDGen --> Client
+    JDParse --> Client
+    ResumeParse --> Client
+    Scoring --> Client
+    Interview --> Client
+
+    Model --> JDGen
+    Model --> JDParse --> Criteria
+    Model --> ResumeParse --> Profile
+    Criteria --> Scoring
+    Profile --> Scoring
+    Scoring --> Report
+    Interview --> Report
+
+    JDParse -.失败 / 未配置.-> RuleJD["规则 JD 解析"]
+    ResumeParse -.失败 / 未配置.-> RegexResume["正则简历解析"]
+    Scoring -.失败 / 未配置.-> RuleScore["规则五维评分"]
+    Interview -.失败 / 未配置.-> TemplateQuestion["模板面试题库"]
+```
+
+### 大模型调用时序图 · 从职位到候选人报告
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor HR as HR
+    participant UI as Next.js 前端
+    participant Jobs as /api/jobs
+    participant Tasks as /api/tasks
+    participant Pipeline as profile_pipeline
+    participant LLMClient as chat_json()
+    participant Model as OpenAI 兼容大模型
+    participant Fallback as 规则/模板降级
+    participant DB as PostgreSQL
+
+    HR->>UI: 输入职位标题和岗位描述
+    UI->>Jobs: POST /api/jobs/generate-jd
+    Jobs->>LLMClient: JD_GEN_SYSTEM + title + description
+    LLMClient->>Model: model = LLM_MODEL
+    Model-->>LLMClient: {"jd_text": "..."}
+    LLMClient-->>Jobs: 完整 JD
+    Jobs-->>UI: 返回可编辑 JD
+
+    HR->>UI: 保存职位或点击 AI 解析
+    UI->>Jobs: POST /api/jobs 或 /parse-jd
+    Jobs->>LLMClient: JD_PARSE_SYSTEM + raw_jd
+    alt LLM 可用且 JSON 合法
+        LLMClient->>Model: 解析 JD
+        Model-->>LLMClient: JobCriteria JSON
+        Jobs->>DB: 保存 Job.criteria
+    else 未配置、异常或字段不兼容
+        Jobs->>Fallback: parse_jd_to_criteria
+        Fallback-->>Jobs: 规则式 JobCriteria
+        Jobs->>DB: 保存 Job.criteria
+    end
+
+    HR->>UI: 上传候选人 ZIP
+    UI->>Tasks: POST /api/tasks/upload
+    Tasks-->>UI: task_id
+    Tasks->>Pipeline: ZIP 分拣完成后逐候选人 compute_report
+
+    loop 每位候选人
+        Pipeline->>LLMClient: RESUME_PARSE_SYSTEM + 简历全文
+        alt 简历画像 LLM 成功
+            LLMClient->>Model: 抽取 ResumeProfile
+            Model-->>LLMClient: ResumeProfile JSON
+        else 简历画像失败
+            Pipeline->>Fallback: parse_resume 正则解析
+        end
+
+        Pipeline->>Pipeline: verify_profile 履历核验
+
+        Pipeline->>LLMClient: SCORING_SYSTEM + criteria/profile/verification
+        alt 五维评分 LLM 成功
+            LLMClient->>Model: 生成五维评分
+            Model-->>LLMClient: DimensionScore JSON
+        else 五维评分失败
+            Pipeline->>Fallback: score_candidate 规则评分
+        end
+
+        Pipeline->>LLMClient: INTERVIEW_SYSTEM + 弱项维度
+        alt 面试提纲 LLM 成功
+            LLMClient->>Model: 生成 3 条问题与 intent
+            Model-->>LLMClient: InterviewQuestion JSON
+        else 面试提纲失败
+            Pipeline->>Fallback: generate_questions 模板题库
+        end
+
+        Pipeline->>DB: 写入 Candidate.score / Candidate.report
+    end
 ```
 
 ### 关键业务节点时序图 · 上传 ZIP 到候选人报告
